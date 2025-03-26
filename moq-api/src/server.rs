@@ -1,4 +1,7 @@
-use std::net;
+use std::{
+    net,
+    path::PathBuf
+};
 
 use axum::{
     extract::{Path, State},
@@ -25,6 +28,10 @@ pub struct ServerConfig {
     /// Connect to the given redis instance
     #[arg(long)]
     pub redis: url::Url,
+
+    /// Parse topology file
+    #[arg(long, required = false)]
+    pub topo: Option<PathBuf>,
 }
 
 pub struct Server {
