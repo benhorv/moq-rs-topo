@@ -15,6 +15,7 @@ if [ ! -f dev/bbb.fmp4 ]; then
 	ffmpeg -i dev/bbb.mp4 \
 		-c copy \
 		-f mp4 -movflags cmaf+separate_moof+delay_moov+skip_trailer+frag_every_frame \
+        -an \
 		dev/bbb.fmp4
 fi
 
