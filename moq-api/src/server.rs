@@ -1,10 +1,11 @@
 use std::{
+    collections::HashMap,
     net,
-    path::PathBuf
+    path::PathBuf,
 };
 
 use axum::{
-    extract::{Path, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
@@ -49,6 +50,18 @@ impl Server {
         // Create the redis client.
         let redis = redis::Client::open(self.config.redis)?;
         let redis = redis.get_connection_manager().await?;
+
+        // Load topology
+        if let Some(topo) = &self.config.topo {
+            log::info!("loading topology: path={}", topo.display());
+            match std::fs::read_to_string(topo) {
+                Ok(topo) => {}
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                    log::warn!("topology file not found: path={}", topo.display());
+                }
+                Err(err) => return Err(err.into()),
+            }
+        }
 
         let app = Router::new()
             .route(
