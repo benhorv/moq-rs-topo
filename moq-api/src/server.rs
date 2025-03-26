@@ -52,18 +52,21 @@ impl Server {
         let redis = redis.get_connection_manager().await?;
 
         // Load topology
-        if let Some(topo) = &self.config.topo {
+        let map = if let Some(topo) = &self.config.topo {
             log::info!("loading topology: path={}", topo.display());
             match std::fs::read_to_string(topo) {
                 Ok(topo) => {
-                    let map = parse_topology(&topo).unwrap();
+                    parse_topology(&topo).unwrap()
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                     log::warn!("topology file not found: path={}", topo.display());
+                    HashMap::new()
                 }
                 Err(err) => return Err(err.into()),
             }
-        }
+        } else {
+            HashMap::new()
+        };
 
         let app = Router::new()
             .route(
@@ -73,7 +76,8 @@ impl Server {
                     .delete(delete_origin)
                     .patch(patch_origin),
             )
-            .with_state(redis);
+            .with_state(redis)
+            .layer(Extension(map));
 
         log::info!("serving requests: bind={}", self.config.bind);
 
@@ -85,16 +89,27 @@ impl Server {
 }
 
 async fn get_origin(
+    Extension(map): Extension<HashMap<String, String>>,
     Path(namespace): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
     State(mut redis): State<ConnectionManager>,
 ) -> Result<Json<Origin>, AppError> {
-    let key = origin_key(&namespace);
+    if let Some(requester) = params.get("requester").cloned() {
+        let key = format!("{{{}}}{}", namespace, requester);
+        let source = map.get(&key).ok_or(AppError::NotFound)?.clone();
+        let origin = Origin {
+            url: url::Url::parse(&source).unwrap(),
+        };
+        Ok(Json(origin))
+    } else {
+        let key = origin_key(&namespace);
 
-    let payload: Option<String> = redis.get(&key).await?;
-    let payload = payload.ok_or(AppError::NotFound)?;
-    let origin: Origin = serde_json::from_str(&payload)?;
+        let payload: Option<String> = redis.get(&key).await?;
+        let payload = payload.ok_or(AppError::NotFound)?;
+        let origin: Origin = serde_json::from_str(&payload)?;
+        Ok(Json(origin))
+    }
 
-    Ok(Json(origin))
 }
 
 async fn set_origin(
