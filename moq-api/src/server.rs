@@ -55,7 +55,9 @@ impl Server {
         if let Some(topo) = &self.config.topo {
             log::info!("loading topology: path={}", topo.display());
             match std::fs::read_to_string(topo) {
-                Ok(topo) => {}
+                Ok(topo) => {
+                    let map = parse_topology(&topo).unwrap();
+                }
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                     log::warn!("topology file not found: path={}", topo.display());
                 }
@@ -173,6 +175,22 @@ async fn patch_origin(
 
 fn origin_key(namespace: &str) -> String {
     format!("origin.{}", namespace)
+}
+
+fn parse_topology(content: &str) -> Result<HashMap<String, String>, AppError> {
+    let mut node_map: HashMap<String, String> = HashMap::new();
+
+    let lines: Vec<String> = content
+        .trim_end_matches('\n')
+        .split('\n')
+        .map(|s| s.to_string())
+        .collect();
+    for line in lines {
+        let node_pair: Vec<String> = line.split(';').map(|s| s.to_string()).collect();
+        node_map.insert(node_pair[0].clone(), node_pair[1].clone());
+    }
+
+    return Ok(node_map)
 }
 
 #[derive(thiserror::Error, Debug)]
