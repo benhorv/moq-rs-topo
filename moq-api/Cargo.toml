@@ -37,6 +37,11 @@ redis = { version = "0.32", features = [
 ] }
 url = { version = "2", features = ["serde"] }
 
+# Graphs
+petgraph = { git = "https://github.com/Bromind/petgraph.git", branch = "dot_parser", features = ["dot_parser"] } # use crate after dot-parser is merged
+dot-parser = "*"
+dot-parser-macros = "*"
+
 # Error handling
 log = { workspace = true }
 env_logger = { workspace = true }

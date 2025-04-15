@@ -1,7 +1,5 @@
 use std::{
-    collections::HashMap,
-    net,
-    path::PathBuf,
+    collections::HashMap, net, path::PathBuf
 };
 
 use axum::{
@@ -193,7 +191,7 @@ fn origin_key(namespace: &str) -> String {
 }
 
 fn parse_topology(content: &str) -> Result<HashMap<String, String>, AppError> {
-    let mut node_map: HashMap<String, String> = HashMap::new();
+    let mut node_map = read_graph();
 
     let lines: Vec<String> = content
         .trim_end_matches('\n')
@@ -206,6 +204,36 @@ fn parse_topology(content: &str) -> Result<HashMap<String, String>, AppError> {
     }
 
     return Ok(node_map)
+}
+
+fn read_graph() -> HashMap<String, String> {
+    let graph: petgraph::graph::Graph<_, _> = petgraph::dot::dot_parser::graph_from_file!("/home/collybita/repos/moq-rs-topo/target/debug/topo.dot");
+
+    let mut map: HashMap<String, String> = HashMap::new();
+
+    for node_index in graph.node_indices() {
+
+        let id = graph[node_index].clone().id;
+        let mut neighbors = graph.neighbors_directed(node_index, petgraph::Direction::Outgoing);
+        let next_neighbor_index = neighbors.next();
+
+        match next_neighbor_index {
+            Some(next_neighbor_index) => {
+                for (key, value) in graph[next_neighbor_index].clone().attr.elems {
+                    if key == "label" {
+                        let url = value.trim_matches('"');
+                        map.insert(id.clone(), url.to_string());
+                    }
+                }
+                println!("Next neighbor index with smallest weight: {:?}", next_neighbor_index);
+            }
+            None => {
+                println!("No neighbors found");
+            }
+        }
+    }
+
+    return map;
 }
 
 #[derive(thiserror::Error, Debug)]
