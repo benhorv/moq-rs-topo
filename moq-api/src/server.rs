@@ -1,6 +1,4 @@
-use std::{
-    collections::HashMap, net, path::PathBuf
-};
+use std::{collections::HashMap, net, path::PathBuf};
 
 use axum::{
     extract::{Extension, Path, Query, State},
@@ -53,9 +51,7 @@ impl Server {
         let map = if let Some(topo) = &self.config.topo {
             log::info!("loading topology: path={}", topo.display());
             match std::fs::read_to_string(topo) {
-                Ok(topo) => {
-                    parse_topology(&topo).unwrap()
-                }
+                Ok(topo) => parse_topology(&topo).unwrap(),
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                     log::warn!("topology file not found: path={}", topo.display());
                     HashMap::new()
@@ -95,8 +91,9 @@ async fn get_origin(
     if let Some(requester) = params.get("requester").cloned() {
         let key = format!("{{{}}}{}", namespace, requester);
         let source = map.get(&key).ok_or(AppError::NotFound)?.clone();
+        let (_, o) = source.split_once('}').expect("error parsing source, check label format");
         let origin = Origin {
-            url: url::Url::parse(&source).unwrap(),
+            url: url::Url::parse(&o).unwrap(),
         };
         Ok(Json(origin))
     } else {
@@ -107,7 +104,6 @@ async fn get_origin(
         let origin: Origin = serde_json::from_str(&payload)?;
         Ok(Json(origin))
     }
-
 }
 
 async fn set_origin(
@@ -191,29 +187,25 @@ fn origin_key(namespace: &str) -> String {
 }
 
 fn parse_topology(content: &str) -> Result<HashMap<String, String>, AppError> {
-    let mut node_map = read_graph();
-
-    let lines: Vec<String> = content
-        .trim_end_matches('\n')
-        .split('\n')
-        .map(|s| s.to_string())
-        .collect();
-    for line in lines {
-        let node_pair: Vec<String> = line.split(';').map(|s| s.to_string()).collect();
-        node_map.insert(node_pair[0].clone(), node_pair[1].clone());
-    }
-
-    return Ok(node_map)
+    let node_map = read_graph();
+    return Ok(node_map);
 }
 
 fn read_graph() -> HashMap<String, String> {
-    let graph: petgraph::graph::Graph<_, _> = petgraph::dot::dot_parser::graph_from_file!("/home/collybita/repos/moq-rs-topo/target/debug/topo.dot");
+    let graph: petgraph::graph::Graph<_, _> = petgraph::dot::dot_parser::graph_from_file!(
+        "/home/collybita/repos/moq-rs-topo/target/debug/topo.dot"
+    );
 
     let mut map: HashMap<String, String> = HashMap::new();
 
     for node_index in graph.node_indices() {
+        let mut source_url: String = String::new();
 
-        let id = graph[node_index].clone().id;
+        for (key, value) in graph[node_index].clone().attr.elems {
+            if key == "label" {
+                source_url = value.trim_matches('"').to_string();
+            }
+        }
         let mut neighbors = graph.neighbors_directed(node_index, petgraph::Direction::Outgoing);
         let next_neighbor_index = neighbors.next();
 
@@ -222,13 +214,12 @@ fn read_graph() -> HashMap<String, String> {
                 for (key, value) in graph[next_neighbor_index].clone().attr.elems {
                     if key == "label" {
                         let url = value.trim_matches('"');
-                        map.insert(id.clone(), url.to_string());
+                        map.insert(source_url.clone(), url.to_string());
                     }
                 }
-                println!("Next neighbor index with smallest weight: {:?}", next_neighbor_index);
             }
             None => {
-                println!("No neighbors found");
+                log::info!("No more neighbors found");
             }
         }
     }
