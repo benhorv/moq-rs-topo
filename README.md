@@ -12,8 +12,6 @@ Replace `/bbb` with your namespace and the urls with the relay's addresses.
 
 ```dot
 digraph bbb {
-    label = "/bbb"
-    id = "/bbb"
     R1 [label="{/bbb}https://localhost:4451/"]
     R2 [label="{/bbb}https://localhost:4452/"]
     R3 [label="{/bbb}https://localhost:4453/"]
