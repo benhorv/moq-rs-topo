@@ -187,13 +187,14 @@ fn origin_key(namespace: &str) -> String {
 }
 
 fn parse_topology(content: &str) -> Result<HashMap<String, String>, AppError> {
-    let node_map = read_graph();
+    let node_map = read_graph(content);
     return Ok(node_map);
 }
 
-fn read_graph() -> HashMap<String, String> {
+fn read_graph(content: &str) -> HashMap<String, String> {
+    // TODO: import file dynamically, currently not possible with this petgraph version
     let graph: petgraph::graph::Graph<_, _> = petgraph::dot::dot_parser::graph_from_file!(
-        "/home/collybita/repos/moq-rs-topo/target/debug/topo.dot"
+        "./target/debug/topo.dot"
     );
 
     let mut map: HashMap<String, String> = HashMap::new();
