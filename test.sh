@@ -12,7 +12,7 @@ PORT_RELAY3=4453
 
 # --- File Path Definitions ---
 # This path is relative to the 'moq-api' working directory
-TOPO_FILE_PATH='../target/debug/topo'
+TOPO_FILE_PATH='../topo.dot'
 
 echo "Starting point: $(pwd)"
 echo "Attention: You will need to manually arrange the xterm windows for optimal visibility."
