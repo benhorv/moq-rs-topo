@@ -16,7 +16,7 @@ categories = ["multimedia", "network-programming", "web-programming"]
 
 [dependencies]
 # HTTP server
-axum = "0.7"
+axum = "0.8.5"
 hyper = { version = "1.4", features = ["full"] }
 tokio = { version = "1", features = ["full"] }
 
@@ -45,4 +45,4 @@ dot-parser-macros = "*"
 # Error handling
 log = { workspace = true }
 env_logger = { workspace = true }
-thiserror = "1"
+thiserror = "2.0.17"
