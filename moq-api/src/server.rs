@@ -14,6 +14,13 @@ use redis::{aio::ConnectionManager, AsyncCommands};
 
 use moq_api::{ApiError, Origin};
 
+use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue};
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::registry::Registry;
+use std::sync::Arc;
+use prometheus_client::encoding::text::encode;
+
 /// Runs a HTTP API to create/get origins for broadcasts.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -35,12 +42,50 @@ pub struct Server {
     config: ServerConfig,
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+struct Labels {
+    method: Method,
+    path: String,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelValue)]
+enum Method {
+    GET,
+    POST,
+    PUT,
+    DELETE,
+    PATCH,
+    HEAD,
+}
+
+#[derive(Clone)]
+struct Metrics {
+    http_requests: Family<Labels, Counter>,
+}
+
 impl Server {
     pub fn new(config: ServerConfig) -> Self {
         Self { config }
     }
 
     pub async fn run(self) -> Result<(), ApiError> {
+
+        // Setup metrics collection
+        let mut registry = Registry::default();
+        let http_requests = Family::<Labels, Counter>::default();
+
+        registry.register(
+            "http_requests_total",
+            "Total number of HTTP requests made.",
+            http_requests.clone(),
+        );
+
+        let metrics = Metrics {
+            http_requests: http_requests,
+        };
+
+        let registry_arc = Arc::new(registry);
+
         log::info!("connecting to redis: url={}", self.config.redis);
 
         // Create the redis client.
@@ -70,8 +115,13 @@ impl Server {
                     .delete(delete_origin)
                     .patch(patch_origin),
             )
+            .route(
+                "/metrics",
+                get(metrics_handler).layer(Extension(Arc::clone(&registry_arc))),
+            )
             .with_state(redis)
-            .layer(Extension(map));
+            .layer(Extension(map))
+            .layer(Extension(metrics));
 
         log::info!("serving requests: bind={}", self.config.bind);
 
@@ -82,16 +132,33 @@ impl Server {
     }
 }
 
+async fn metrics_handler(Extension(registry): Extension<Arc<Registry>>) -> String {
+    let mut buffer = String::new();
+    encode(&mut buffer, &registry).unwrap();
+    buffer
+}
+
 async fn get_origin(
+    Extension(metrics): Extension<Metrics>,
     Extension(map): Extension<HashMap<String, String>>,
     Path(namespace): Path<String>,
     Query(params): Query<HashMap<String, String>>,
     State(mut redis): State<ConnectionManager>,
 ) -> Result<Json<Origin>, AppError> {
+
+    let labels = Labels {
+        method: Method::GET,
+        path: "/origin".to_string(),
+    };
+
+    metrics.http_requests.get_or_create(&labels).inc();
+
     if let Some(requester) = params.get("requester").cloned() {
         let key = format!("{{{}}}{}", namespace, requester);
         let source = map.get(&key).ok_or(AppError::NotFound)?.clone();
-        let (_, o) = source.split_once('}').expect("error parsing source, check label format");
+        let (_, o) = source
+            .split_once('}')
+            .expect("error parsing source, check label format");
         let origin = Origin {
             url: url::Url::parse(&o).unwrap(),
         };
@@ -193,9 +260,8 @@ fn parse_topology(content: &str) -> Result<HashMap<String, String>, AppError> {
 
 fn read_graph(content: &str) -> HashMap<String, String> {
     // TODO: import file dynamically, currently not possible with this petgraph version
-    let graph: petgraph::graph::Graph<_, _> = petgraph::dot::dot_parser::graph_from_file!(
-        "./topo.dot"
-    );
+    let graph: petgraph::graph::Graph<_, _> =
+        petgraph::dot::dot_parser::graph_from_file!("./topo.dot");
 
     let mut map: HashMap<String, String> = HashMap::new();
 
