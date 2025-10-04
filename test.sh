@@ -44,32 +44,59 @@ launch_xterm() {
 # --- Cleanup handler ---
 cleanup() {
     echo "Cleaning up..."
-    # Kill xterm processes
     kill "${pids[@]}" 2>/dev/null || true
-    # Kill redis-server if somehow still running
     pkill -f "redis-server" 2>/dev/null || true
 }
 trap cleanup EXIT
 
 # --- Launch processes in xterm ---
+
 launch_xterm "Redis Server" \
     "exec redis-server --daemonize no"
 wait_for_port $PORT_REDIS
 
 launch_xterm "moq-api (P:$PORT_MOQ_API)" \
-    "cd moq-api && exec cargo run --bin moq-api -- --bind '[::]:$PORT_MOQ_API' --redis 'redis://localhost:$PORT_REDIS/' --topo '$TOPO_FILE_PATH'"
+    "cd moq-api && \
+     exec cargo run --bin moq-api -- \
+       --bind '[::]:$PORT_MOQ_API' \
+       --redis 'redis://localhost:$PORT_REDIS/' \
+       --topo '$TOPO_FILE_PATH'"
 wait_for_port $PORT_MOQ_API
 
 launch_xterm "Relay 1 (P:$PORT_RELAY1)" \
-    "cd moq-relay-ietf && exec cargo run --bin moq-relay-ietf -- --bind '[::]:$PORT_RELAY1' --tls-cert ../dev/localhost.crt --tls-key ../dev/localhost.key --tls-disable-verify --api http://localhost:$PORT_MOQ_API --node https://localhost:$PORT_RELAY1 --dev"
+    "cd moq-relay-ietf && \
+     exec cargo run --bin moq-relay-ietf -- \
+       --bind '[::]:$PORT_RELAY1' \
+       --tls-cert ../dev/localhost.crt \
+       --tls-key ../dev/localhost.key \
+       --tls-disable-verify \
+       --api http://localhost:$PORT_MOQ_API \
+       --node https://localhost:$PORT_RELAY1 \
+       --dev"
 wait_for_port $PORT_RELAY1
 
 launch_xterm "Relay 2 (P:$PORT_RELAY2)" \
-    "cd moq-relay-ietf && exec cargo run --bin moq-relay-ietf -- --bind '[::]:$PORT_RELAY2' --tls-cert ../dev/localhost.crt --tls-key ../dev/localhost.key --tls-disable-verify --api http://localhost:$PORT_MOQ_API --node https://localhost:$PORT_RELAY2 --dev"
+    "cd moq-relay-ietf && \
+     exec cargo run --bin moq-relay-ietf -- \
+       --bind '[::]:$PORT_RELAY2' \
+       --tls-cert ../dev/localhost.crt \
+       --tls-key ../dev/localhost.key \
+       --tls-disable-verify \
+       --api http://localhost:$PORT_MOQ_API \
+       --node https://localhost:$PORT_RELAY2 \
+       --dev"
 wait_for_port $PORT_RELAY2
 
 launch_xterm "Relay 3 (P:$PORT_RELAY3)" \
-    "cd moq-relay-ietf && exec cargo run --bin moq-relay-ietf -- --bind '[::]:$PORT_RELAY3' --tls-cert ../dev/localhost.crt --tls-key ../dev/localhost.key --tls-disable-verify --api http://localhost:$PORT_MOQ_API --node https://localhost:$PORT_RELAY3 --dev"
+    "cd moq-relay-ietf && \
+     exec cargo run --bin moq-relay-ietf -- \
+       --bind '[::]:$PORT_RELAY3' \
+       --tls-cert ../dev/localhost.crt \
+       --tls-key ../dev/localhost.key \
+       --tls-disable-verify \
+       --api http://localhost:$PORT_MOQ_API \
+       --node https://localhost:$PORT_RELAY3 \
+       --dev"
 wait_for_port $PORT_RELAY3
 
 launch_xterm "Publisher (to P:$PORT_RELAY1)" \
