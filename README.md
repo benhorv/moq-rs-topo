@@ -53,6 +53,10 @@ You may have to install `xterm`.
 
 If everything works correctly, you should see the Big Buck Bunny test video with the terminals running separetly with the given components.
 
+## Metrics collection with Prometheus
+
+There is currently an ongoing development with the goal of integrating Prometheus with the project. Basic metrics are available on `\metrics` in the API server.
+
 # License
 
 Licensed under either:
