@@ -16,7 +16,7 @@ categories = ["multimedia", "network-programming", "web-programming"]
 
 [dependencies]
 # HTTP server
-axum = "0.8.5"
+axum = "0.7"
 hyper = { version = "1.4", features = ["full"] }
 tokio = { version = "1", features = ["full"] }
 
@@ -38,11 +38,15 @@ redis = { version = "0.32", features = [
 url = { version = "2", features = ["serde"] }
 
 # Graphs
-petgraph = { git = "https://github.com/Bromind/petgraph.git", branch = "dot_parser", features = ["dot_parser"] } # use crate after dot-parser is merged
-dot-parser = "*"
+petgraph = { version = "*", features = ["dot_parser"] }
+dot-parser = "=0.5.1"
 dot-parser-macros = "*"
 
 # Error handling
 log = { workspace = true }
 env_logger = { workspace = true }
-thiserror = "2.0.17"
+thiserror = "1"
+metrics-exporter-prometheus = "0.17.2"
+metrics = "0.24.2"
+metrics-macros = "0.7.1"
+prometheus-client = "0.24.0"
