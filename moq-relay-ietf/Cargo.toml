@@ -16,6 +16,11 @@ moq-transport = { path = "../moq-transport", version = "0.11" }
 moq-native-ietf = { path = "../moq-native-ietf", version = "0.5" }
 moq-api = { path = "../moq-api", version = "0.2" }
 
+# Metrics
+moq-metrics = { path = "../moq-metrics" }
+prometheus-client = "0.24"
+scopeguard = "1.2"
+
 # QUIC
 url = "2"
 

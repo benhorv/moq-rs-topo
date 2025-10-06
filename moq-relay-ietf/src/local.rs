@@ -3,6 +3,8 @@ use std::collections::HashMap;
 
 use std::sync::{Arc, Mutex};
 
+use moq_metrics::RelayMetrics;
+
 use moq_transport::{
     coding::TrackNamespace,
     serve::{ServeError, TracksReader},
@@ -11,25 +13,26 @@ use moq_transport::{
 #[derive(Clone)]
 pub struct Locals {
     lookup: Arc<Mutex<HashMap<TrackNamespace, TracksReader>>>,
-}
-
-impl Default for Locals {
-    fn default() -> Self {
-        Self::new()
-    }
+    metrics: RelayMetrics,
 }
 
 impl Locals {
-    pub fn new() -> Self {
+    pub fn new(metrics: RelayMetrics) -> Self {
         Self {
             lookup: Default::default(),
+            metrics
         }
     }
 
     pub async fn register(&mut self, tracks: TracksReader) -> anyhow::Result<Registration> {
         let namespace = tracks.namespace.clone();
         match self.lookup.lock().unwrap().entry(namespace.clone()) {
-            hash_map::Entry::Vacant(entry) => entry.insert(tracks),
+            hash_map::Entry::Vacant(entry) => {
+                entry.insert(tracks);
+
+                self.metrics.announced_tracks_total.inc();
+                self.metrics.announced_tracks_current.inc();
+            },
             hash_map::Entry::Occupied(_) => return Err(ServeError::Duplicate.into()),
         };
 
@@ -53,6 +56,9 @@ pub struct Registration {
 
 impl Drop for Registration {
     fn drop(&mut self) {
-        self.locals.lookup.lock().unwrap().remove(&self.namespace);
+        let mut lookup= self.locals.lookup.lock().unwrap();
+        if lookup.remove(&self.namespace).is_some() {
+             self.locals.metrics.announced_tracks_current.dec();
+        }
     }
 }

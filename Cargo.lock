@@ -1518,6 +1518,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "moq-metrics"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "prometheus-client",
+]
+
+[[package]]
 name = "moq-native-ietf"
 version = "0.5.5"
 dependencies = [
@@ -1573,8 +1581,11 @@ dependencies = [
  "hyper-serve",
  "log",
  "moq-api",
+ "moq-metrics",
  "moq-native-ietf",
  "moq-transport",
+ "prometheus-client",
+ "scopeguard",
  "tokio",
  "tower-http 0.5.2",
  "tracing",

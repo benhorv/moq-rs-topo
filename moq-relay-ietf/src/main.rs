@@ -46,6 +46,10 @@ pub struct Cli {
     #[arg(long)]
     pub node: Option<Url>,
 
+    /// Metrics server listens on this address.
+    #[arg(long, default_value = "[::]:9090")]
+    pub metrics_bind: net::SocketAddr,
+
     /// Enable development mode.
     /// This hosts a HTTPS web server via TCP to serve the fingerprint of the certificate.
     #[arg(long)]
@@ -76,6 +80,7 @@ async fn main() -> anyhow::Result<()> {
         node: cli.node,
         api: cli.api,
         announce: cli.announce,
+        metrics_bind: cli.metrics_bind,
     })?;
 
     if cli.dev {
