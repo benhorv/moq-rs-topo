@@ -111,6 +111,8 @@ impl Relay {
             consumer
         });
 
+        let global_metrics = self.metrics.clone();
+
         let forward = if let Some(url) = &self.announce {
             log::info!("forwarding announces to {}", url);
             let session = self
@@ -131,8 +133,15 @@ impl Relay {
                     publisher,
                     self.locals.clone(),
                     remotes.clone(),
+                    global_metrics.clone(),
                 )),
-                consumer: Some(Consumer::new(subscriber, self.locals.clone(), None, None)),
+                consumer: Some(Consumer::new(
+                    subscriber,
+                    self.locals.clone(),
+                    None,
+                    None,
+                    global_metrics.clone()
+                )),
             };
 
             let forward = session.producer.clone();
@@ -158,6 +167,8 @@ impl Relay {
                     let forward = forward.clone();
                     let api = self.api.clone();
 
+                    let task_metrics = global_metrics.clone();
+
                     tasks.push(async move {
                         let (session, publisher, subscriber) = match moq_transport::session::Session::accept(conn).await {
                             Ok(session) => session,
@@ -169,8 +180,8 @@ impl Relay {
 
                         let session = Session {
                             session,
-                            producer: publisher.map(|publisher| Producer::new(publisher, locals.clone(), remotes)),
-                            consumer: subscriber.map(|subscriber| Consumer::new(subscriber, locals, api, forward)),
+                            producer: publisher.map(|publisher| Producer::new(publisher, locals.clone(), remotes, task_metrics.clone())),
+                            consumer: subscriber.map(|subscriber| Consumer::new(subscriber, locals, api, forward, task_metrics)),
                         };
 
                         if let Err(err) = session.run().await {
