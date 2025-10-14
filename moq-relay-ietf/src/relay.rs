@@ -8,10 +8,6 @@ use url::Url;
 
 use crate::{Api, Consumer, Locals, Producer, Remotes, RemotesConsumer, RemotesProducer, Session};
 
-use std::sync::Arc;
-use prometheus_client::registry::Registry;
-use moq_metrics::{RelayMetrics, metrics_router};
-
 pub struct RelayConfig {
     /// Listen on this address
     pub bind: net::SocketAddr,
@@ -33,14 +29,12 @@ pub struct RelayConfig {
     pub metrics_bind: net::SocketAddr,
 }
 
-pub struct Relay {
+pub struct Relay { // macro? kibővítené a 3 tagváltozóval + new
     quic: quic::Endpoint,
     announce: Option<Url>,
     locals: Locals,
     api: Option<Api>,
     remotes: Option<(RemotesProducer, RemotesConsumer)>,
-    metrics: RelayMetrics,
-    registry: Arc<Registry>,
     metrics_bind: net::SocketAddr,
 }
 
@@ -52,11 +46,6 @@ impl Relay {
             tls: config.tls,
         })?;
 
-        // registry and metrics init
-        let mut registry = Registry::default();
-        let metrics = RelayMetrics::new(&mut registry);
-        let registry_arc = Arc::new(registry);
-
         let api = if let (Some(url), Some(node)) = (config.api, config.node) {
             log::info!("using moq-api: url={} node={}", url, node);
             Some(Api::new(url, node))
@@ -64,7 +53,7 @@ impl Relay {
             None
         };
 
-        let locals = Locals::new(metrics.clone());
+        let locals = Locals::new();
 
         let remotes = api.clone().map(|api| {
             Remotes {
@@ -80,38 +69,25 @@ impl Relay {
             api,
             locals,
             remotes,
-            metrics,
-            registry: registry_arc,
             metrics_bind: config.metrics_bind
         })
+        // mindent metricsbe pakolni? locals remotes api
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
         let mut tasks = FuturesUnordered::new();
 
-        // HTTP server setup
-        let metrics_registry_arc = Arc::clone(&self.registry);
-        let metrics_bind_addr = self.metrics_bind;
-
-        let http_metrics_task = tokio::spawn(async move {
-            let metrics_router = metrics_router(metrics_registry_arc); // From moq_metrics
-
-            log::info!("serving metrics: bind={}", metrics_bind_addr);
-
-            let listener = tokio::net::TcpListener::bind(metrics_bind_addr).await
-                .with_context(|| format!("Failed to bind metrics address: {}", metrics_bind_addr))?;
-
-            axum::serve(listener, metrics_router.into_make_service()).await
-                .context("Metrics server failed")
-        });
-        tasks.push(http_metrics_task.map(|res| res.unwrap_or_else(|e| Err(anyhow::anyhow!("Metrics task failed: {}", e)))).boxed());
+        let metrics_task_handle = moq_metrics::run_server(self.metrics_bind)?;
+        tasks.push(
+            metrics_task_handle
+                .map(|res| res.unwrap_or_else(|e| Err(anyhow::anyhow!("Metrics task panicked: {}", e))))
+                .boxed()
+        );
 
         let remotes = self.remotes.map(|(producer, consumer)| {
             tasks.push(producer.run().boxed());
             consumer
         });
-
-        let global_metrics = self.metrics.clone();
 
         let forward = if let Some(url) = &self.announce {
             log::info!("forwarding announces to {}", url);
@@ -132,15 +108,13 @@ impl Relay {
                 producer: Some(Producer::new(
                     publisher,
                     self.locals.clone(),
-                    remotes.clone(),
-                    global_metrics.clone(),
+                    remotes.clone()
                 )),
                 consumer: Some(Consumer::new(
                     subscriber,
                     self.locals.clone(),
                     None,
-                    None,
-                    global_metrics.clone()
+                    None
                 )),
             };
 
@@ -167,8 +141,6 @@ impl Relay {
                     let forward = forward.clone();
                     let api = self.api.clone();
 
-                    let task_metrics = global_metrics.clone();
-
                     tasks.push(async move {
                         let (session, publisher, subscriber) = match moq_transport::session::Session::accept(conn).await {
                             Ok(session) => session,
@@ -180,8 +152,8 @@ impl Relay {
 
                         let session = Session {
                             session,
-                            producer: publisher.map(|publisher| Producer::new(publisher, locals.clone(), remotes, task_metrics.clone())),
-                            consumer: subscriber.map(|subscriber| Consumer::new(subscriber, locals, api, forward, task_metrics)),
+                            producer: publisher.map(|publisher| Producer::new(publisher, locals.clone(), remotes)),
+                            consumer: subscriber.map(|subscriber| Consumer::new(subscriber, locals, api, forward)),
                         };
 
                         if let Err(err) = session.run().await {

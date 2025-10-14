@@ -211,7 +211,7 @@ macro_rules! track_readers {
 	}
 }
 
-track_readers!(Stream, Subgroups, Datagrams,);
+track_readers!(Stream, Subgroups, Datagrams,); // példa macro-ra
 
 macro_rules! track_writers {
     {$($name:ident,)*} => {

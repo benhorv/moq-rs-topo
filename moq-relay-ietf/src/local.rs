@@ -3,8 +3,6 @@ use std::collections::HashMap;
 
 use std::sync::{Arc, Mutex};
 
-use moq_metrics::RelayMetrics;
-
 use moq_transport::{
     coding::TrackNamespace,
     serve::{ServeError, TracksReader},
@@ -12,15 +10,13 @@ use moq_transport::{
 
 #[derive(Clone)]
 pub struct Locals {
-    lookup: Arc<Mutex<HashMap<TrackNamespace, TracksReader>>>,
-    metrics: RelayMetrics,
+    lookup: Arc<Mutex<HashMap<TrackNamespace, TracksReader>>>
 }
 
 impl Locals {
-    pub fn new(metrics: RelayMetrics) -> Self {
+    pub fn new() -> Self {
         Self {
-            lookup: Default::default(),
-            metrics
+            lookup: Default::default()
         }
     }
 
@@ -30,8 +26,7 @@ impl Locals {
             hash_map::Entry::Vacant(entry) => {
                 entry.insert(tracks);
 
-                self.metrics.announced_tracks_total.inc();
-                self.metrics.announced_tracks_current.inc();
+                moq_metrics::increment_announced_tracks();
             },
             hash_map::Entry::Occupied(_) => return Err(ServeError::Duplicate.into()),
         };
@@ -58,7 +53,7 @@ impl Drop for Registration {
     fn drop(&mut self) {
         let mut lookup= self.locals.lookup.lock().unwrap();
         if lookup.remove(&self.namespace).is_some() {
-             self.locals.metrics.announced_tracks_current.dec();
+             moq_metrics::decrement_announced_tracks();
         }
     }
 }

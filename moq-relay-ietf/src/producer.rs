@@ -1,5 +1,4 @@
 use futures::{stream::FuturesUnordered, StreamExt};
-use moq_metrics::RelayMetrics;
 use moq_transport::{
     serve::{ServeError, TrackReader, TracksReader},
     session::{Publisher, SessionError, Subscribed},
@@ -13,22 +12,19 @@ use crate::{Locals, RemotesConsumer};
 pub struct Producer {
     remote: Publisher,
     locals: Locals,
-    remotes: Option<RemotesConsumer>,
-    metrics: RelayMetrics,
+    remotes: Option<RemotesConsumer>
 }
 
 impl Producer {
     pub fn new(
         remote: Publisher,
         locals: Locals,
-        remotes: Option<RemotesConsumer>,
-        metrics: RelayMetrics,
+        remotes: Option<RemotesConsumer>
     ) -> Self {
         Self {
             remote,
             locals,
-            remotes,
-            metrics,
+            remotes
         }
     }
 
@@ -89,14 +85,10 @@ impl Producer {
         }
 
         if let Some(track) = track_to_serve {
-            self.metrics.active_subscribers.inc();
-            log::debug!(
-                "Active subscribers: {}",
-                self.metrics.active_subscribers.get()
-            );
+            moq_metrics::increment_active_subscribers();
 
-            let _subscriber_guard = guard(self.metrics.active_subscribers.clone(), |g| {
-                g.dec();
+            let _subscriber_guard = guard((), |_| {
+                moq_metrics::decrement_active_subscribers();
             });
 
             return Ok(subscribe.serve(track).await?);

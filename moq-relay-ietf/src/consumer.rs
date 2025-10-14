@@ -1,6 +1,5 @@
 use anyhow::Context;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
-use moq_metrics::RelayMetrics;
 use moq_transport::{
     serve::Tracks,
     session::{Announced, SessionError, Subscriber},
@@ -14,7 +13,6 @@ pub struct Consumer {
     locals: Locals,
     api: Option<Api>,
     forward: Option<Producer>, // Forward all announcements to this subscriber
-    metrics: RelayMetrics
 }
 
 impl Consumer {
@@ -23,14 +21,12 @@ impl Consumer {
         locals: Locals,
         api: Option<Api>,
         forward: Option<Producer>,
-        metrics: RelayMetrics
     ) -> Self {
         Self {
             remote,
             locals,
             api,
             forward,
-            metrics
         }
     }
 
