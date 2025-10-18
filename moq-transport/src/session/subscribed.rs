@@ -251,6 +251,8 @@ impl Subscribed {
 
             writer.encode(&subgroup_object).await?;
 
+            moq_metrics::add_objects_sent(1);
+
             state
                 .lock_mut()
                 .ok_or(ServeError::Done)?
@@ -262,6 +264,7 @@ impl Subscribed {
             log::trace!("sent subgroup object: {:?}", subgroup_object);
 
             while let Some(chunk) = subgroup_object_reader.read().await? {
+                moq_metrics::add_bytes_sent(chunk.len() as u64);
                 writer.write(&chunk).await?;
                 // payload length already logged when subgroup object is logged
                 //log::trace!("sent group payload len: {:?}", chunk.len());
@@ -294,6 +297,12 @@ impl Subscribed {
             datagram.encode(&mut buffer)?;
 
             self.publisher.send_datagram(buffer.into()).await?;
+
+            moq_metrics::add_objects_sent(1);
+            if let Some(payload) = &datagram.payload {
+                moq_metrics::add_bytes_sent(payload.len() as u64);
+            }
+
             log::trace!("sent datagram: {:?}", datagram);
 
             self.state

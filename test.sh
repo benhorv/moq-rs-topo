@@ -49,6 +49,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# --- Refresh certs ---
+./dev/cert
+
 # --- Launch processes in xterm ---
 
 launch_xterm "Redis Server" \
@@ -72,6 +75,7 @@ launch_xterm "Relay 1 (P:$PORT_RELAY1)" \
        --tls-disable-verify \
        --api http://localhost:$PORT_MOQ_API \
        --node https://localhost:$PORT_RELAY1 \
+       --metrics-bind "[::]:9091" \
        --dev"
 wait_for_port $PORT_RELAY1
 
@@ -84,6 +88,7 @@ launch_xterm "Relay 2 (P:$PORT_RELAY2)" \
        --tls-disable-verify \
        --api http://localhost:$PORT_MOQ_API \
        --node https://localhost:$PORT_RELAY2 \
+       --metrics-bind "[::]:9092" \
        --dev"
 wait_for_port $PORT_RELAY2
 
@@ -96,6 +101,7 @@ launch_xterm "Relay 3 (P:$PORT_RELAY3)" \
        --tls-disable-verify \
        --api http://localhost:$PORT_MOQ_API \
        --node https://localhost:$PORT_RELAY3 \
+       --metrics-bind "[::]:9093" \
        --dev"
 wait_for_port $PORT_RELAY3
 

@@ -1,5 +1,5 @@
 global:
-  scrape_interval:     15s # By default, scrape targets every 15 seconds.
+  scrape_interval: 15s # By default, scrape targets every 15 seconds.
 
   # Attach these labels to any time series or alerts when communicating with
   # external systems (federation, remote storage, Alertmanager).
@@ -17,3 +17,28 @@ scrape_configs:
 
     static_configs:
       - targets: ['localhost:9090']
+
+  # --- ADD THIS NEW JOB ---
+  # This job will scrape all of your moq-relay instances.
+  - job_name: 'moq-relay'
+
+    # Scrape the relays frequently.
+    scrape_interval: 5s
+
+    static_configs:
+      # We list each relay as a separate target.
+      # Adding labels here is a best practice to easily tell them apart in Grafana.
+      - targets: ['localhost:9091']
+        labels:
+          relay_id: 'relay1'
+          app_port: '4451'
+
+      # - targets: ['localhost:9092']
+      #   labels:
+      #     relay_id: 'relay2'
+      #     app_port: '4452'
+
+      # - targets: ['localhost:9093']
+      #   labels:
+      #     relay_id: 'relay3'
+      #     app_port: '4453'

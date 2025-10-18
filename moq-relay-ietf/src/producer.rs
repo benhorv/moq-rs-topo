@@ -12,19 +12,15 @@ use crate::{Locals, RemotesConsumer};
 pub struct Producer {
     remote: Publisher,
     locals: Locals,
-    remotes: Option<RemotesConsumer>
+    remotes: Option<RemotesConsumer>,
 }
 
 impl Producer {
-    pub fn new(
-        remote: Publisher,
-        locals: Locals,
-        remotes: Option<RemotesConsumer>
-    ) -> Self {
+    pub fn new(remote: Publisher, locals: Locals, remotes: Option<RemotesConsumer>) -> Self {
         Self {
             remote,
             locals,
-            remotes
+            remotes,
         }
     }
 
@@ -56,7 +52,10 @@ impl Producer {
     }
 
     async fn serve(self, subscribe: Subscribed) -> Result<(), anyhow::Error> {
-
+        moq_metrics::increment_active_subscribed_tracks();
+        let _subscriber_guard = guard((), |_| {
+            moq_metrics::decrement_active_subscribed_tracks();
+        });
         let mut track_to_serve: Option<TrackReader> = None;
 
         if let Some(mut local) = self.locals.route(&subscribe.namespace) {
@@ -85,12 +84,6 @@ impl Producer {
         }
 
         if let Some(track) = track_to_serve {
-            moq_metrics::increment_active_subscribers();
-
-            let _subscriber_guard = guard((), |_| {
-                moq_metrics::decrement_active_subscribers();
-            });
-
             return Ok(subscribe.serve(track).await?);
         }
 

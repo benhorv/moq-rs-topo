@@ -1612,6 +1612,7 @@ dependencies = [
  "bytes",
  "futures",
  "log",
+ "moq-metrics",
  "paste",
  "thiserror 1.0.69",
  "tokio",

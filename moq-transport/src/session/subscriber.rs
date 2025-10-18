@@ -275,6 +275,7 @@ impl Subscriber {
                     .read_chunk(remaining_bytes)
                     .await?
                     .ok_or(SessionError::WrongSize)?;
+                moq_metrics::add_bytes_received(data.len() as u64);
                 //log::trace!("received subgroup payload: {:?}", data.len());
                 remaining_bytes -= data.len();
                 object_writer.write(data)?;
@@ -285,6 +286,7 @@ impl Subscriber {
     }
 
     pub fn recv_datagram(&mut self, datagram: bytes::Bytes) -> Result<(), SessionError> {
+        moq_metrics::add_bytes_received(datagram.len() as u64);
         let mut cursor = io::Cursor::new(datagram);
         let datagram = data::Datagram::decode(&mut cursor)?;
 

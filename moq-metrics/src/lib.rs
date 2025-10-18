@@ -1,19 +1,22 @@
-use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::registry::Registry;
+use prometheus_client::{encoding::EncodeLabelSet, metrics::counter::Counter};
 
 use once_cell::sync::Lazy;
 
-use prometheus_client::encoding::text::encode;
-use axum::{
-    routing::get,
-    Router,
-    response::IntoResponse,
-};
-use std::{net::SocketAddr, sync::{Arc, Mutex}};
 use anyhow::Context;
+use axum::{Router, response::IntoResponse, routing::get};
+use prometheus_client::encoding::text::encode;
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
-// TODO: Label
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub struct RelayLabels {
+    // identify relay (ip?)
+    pub relay_id: String,
+}
 
 struct MetricsState {
     registry: Registry,
@@ -31,8 +34,10 @@ static GLOBAL_METRICS: Lazy<Arc<Mutex<MetricsState>>> = Lazy::new(|| {
 pub struct MoqMetrics {
     pub announced_tracks_total: Counter<u64>,
     pub announced_tracks_current: Gauge<i64>,
-    pub active_subscribers: Gauge<i64>,
+    pub active_subscribed_tracks: Gauge<i64>,
     pub objects_sent_total: Counter<u64>,
+    pub bytes_received_from_publisher_total: Counter<u64>,
+    pub bytes_sent_to_subscriber_total: Counter<u64>,
 }
 
 // singleton
@@ -40,12 +45,16 @@ pub struct MoqMetrics {
 // pl. log! enum:
 // quic impl-ből lekérni a belső számlálót (package loss / quic kapcsolat (label valamivel))
 
+// TODO: macro!
+
 impl MoqMetrics {
     pub fn new(registry: &mut Registry) -> Self {
         let announced_tracks_total = Counter::default();
         let announced_tracks_current = Gauge::default();
-        let active_subscribers = Gauge::default();
+        let active_subscribed_tracks = Gauge::default();
         let objects_sent_total = Counter::default();
+        let bytes_received_from_publisher_total = Counter::default();
+        let bytes_sent_to_subscriber_total = Counter::default();
 
         // let mut sub_registry = registry.sub_registry_with_prefix("moq_relay");
 
@@ -60,26 +69,36 @@ impl MoqMetrics {
             announced_tracks_current.clone(),
         );
         registry.register(
-            "active_subscribers",
-            "Current number of active subscribers connected to the relay.",
-            active_subscribers.clone(),
+            "moq_relay_active_subscribed_tracks",
+            "Current number of active subscribed tracks in a relay.",
+            active_subscribed_tracks.clone(),
         );
         registry.register(
-            "objects_sent_total",
+            "moq_relay_objects_sent_total",
             "Total number of objects sent from the relay.",
             objects_sent_total.clone(),
+        );
+        registry.register(
+            "moq_relay_bytes_received_from_publisher_total",
+            "Total number of bytes received by the relay from publishers.",
+            bytes_received_from_publisher_total.clone(),
+        );
+        registry.register(
+            "moq_relay_bytes_sent_to_subscriber_total",
+            "Total number of bytes sent by the relay to subscribers.",
+            bytes_sent_to_subscriber_total.clone(),
         );
 
         MoqMetrics {
             announced_tracks_total,
             announced_tracks_current,
-            active_subscribers,
-            objects_sent_total
+            active_subscribed_tracks,
+            objects_sent_total,
+            bytes_received_from_publisher_total,
+            bytes_sent_to_subscriber_total,
         }
     }
 }
-
-// --- Public API for interacting with metrics ---
 
 pub fn increment_announced_tracks() {
     let state = GLOBAL_METRICS.lock().unwrap();
@@ -92,14 +111,14 @@ pub fn decrement_announced_tracks() {
     state.metrics.announced_tracks_current.dec();
 }
 
-pub fn increment_active_subscribers() {
+pub fn increment_active_subscribed_tracks() {
     let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.active_subscribers.inc();
+    state.metrics.active_subscribed_tracks.inc();
 }
 
-pub fn decrement_active_subscribers() {
+pub fn decrement_active_subscribed_tracks() {
     let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.active_subscribers.dec();
+    state.metrics.active_subscribed_tracks.dec();
 }
 
 pub fn add_objects_sent(count: u64) {
@@ -107,8 +126,15 @@ pub fn add_objects_sent(count: u64) {
     state.metrics.objects_sent_total.inc_by(count);
 }
 
+pub fn add_bytes_received(count: u64) {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.bytes_received_from_publisher_total.inc_by(count);
+}
 
-// --- Axum HTTP Server Logic ---
+pub fn add_bytes_sent(count: u64) {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.bytes_sent_to_subscriber_total.inc_by(count);
+}
 
 async fn metrics_handler() -> impl IntoResponse {
     let mut buffer = String::new();
@@ -117,22 +143,24 @@ async fn metrics_handler() -> impl IntoResponse {
     buffer
 }
 
-/// Returns an Axum Router that serves the /metrics endpoint.
 pub fn metrics_router() -> Router {
-    // We don't need to pass the registry anymore; the handler can access the global.
     Router::new().route("/metrics", get(metrics_handler))
 }
 
-pub fn run_server(bind_addr: SocketAddr) -> anyhow::Result<tokio::task::JoinHandle<anyhow::Result<()>>> {
+pub fn run_server(
+    bind_addr: SocketAddr,
+) -> anyhow::Result<tokio::task::JoinHandle<anyhow::Result<()>>> {
     let task = tokio::spawn(async move {
         log::info!("serving metrics: bind={}", bind_addr);
 
         let app = metrics_router();
 
-        let listener = tokio::net::TcpListener::bind(bind_addr).await
+        let listener = tokio::net::TcpListener::bind(bind_addr)
+            .await
             .with_context(|| format!("Failed to bind metrics address: {}", bind_addr))?;
 
-        axum::serve(listener, app.into_make_service()).await
+        axum::serve(listener, app.into_make_service())
+            .await
             .context("Metrics server failed")
     });
 
