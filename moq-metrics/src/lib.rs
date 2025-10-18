@@ -1,3 +1,4 @@
+use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::registry::Registry;
 use prometheus_client::{encoding::EncodeLabelSet, metrics::counter::Counter};
@@ -13,9 +14,8 @@ use std::{
 };
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub struct RelayLabels {
-    // identify relay (ip?)
-    pub relay_id: String,
+pub struct ConnectionLabels {
+    pub addr: String,
 }
 
 struct MetricsState {
@@ -39,10 +39,9 @@ pub struct MoqMetrics {
     pub bytes_received_from_publisher_total: Counter<u64>,
     pub bytes_sent_to_subscriber_total: Counter<u64>,
     pub active_publishers: Gauge<i64>,
+    pub quic_rtt_milliseconds: Family<ConnectionLabels, Gauge<i64>>,
 }
 
-// singleton
-// main-ben egyet példányosítani
 // pl. log! enum:
 // quic impl-ből lekérni a belső számlálót (package loss / quic kapcsolat (label valamivel))
 
@@ -57,43 +56,49 @@ impl MoqMetrics {
         let bytes_received_from_publisher_total = Counter::default();
         let bytes_sent_to_subscriber_total = Counter::default();
         let active_publishers = Gauge::default();
+        let quic_rtt_milliseconds = Family::default();
 
         // let mut sub_registry = registry.sub_registry_with_prefix("moq_relay");
 
         registry.register(
             "moq_relay_announced_tracks_total",
-            "Total number of tracks ever announced to or via this relay.",
+            "Total number of tracks ever announced to or via this relay",
             announced_tracks_total.clone(),
         );
         registry.register(
             "moq_relay_announced_tracks_current",
-            "Current number of active, announced tracks being tracked by the relay.",
+            "Current number of active, announced tracks being tracked by the relay",
             announced_tracks_current.clone(),
         );
         registry.register(
             "moq_relay_active_subscribed_tracks",
-            "Current number of active subscribed tracks in a relay.",
+            "Current number of active subscribed tracks in a relay",
             active_subscribed_tracks.clone(),
         );
         registry.register(
             "moq_relay_objects_sent_total",
-            "Total number of objects sent from the relay.",
+            "Total number of objects sent from the relay",
             objects_sent_total.clone(),
         );
         registry.register(
             "moq_relay_bytes_received_from_publisher_total",
-            "Total number of bytes received by the relay from publishers.",
+            "Total number of bytes received by the relay from publishers",
             bytes_received_from_publisher_total.clone(),
         );
         registry.register(
             "moq_relay_bytes_sent_to_subscriber_total",
-            "Total number of bytes sent by the relay to subscribers.",
+            "Total number of bytes sent by the relay to subscribers",
             bytes_sent_to_subscriber_total.clone(),
         );
         registry.register(
             "moq_relay_active_publishers",
-            "Current number of actibe publishers.",
+            "Current number of actibe publishers",
             active_publishers.clone(),
+        );
+        registry.register(
+            "moq_relay_quic_rtt_milliseconds",
+            "Estimated RTT of an active QUIC connection in milliseconds",
+            quic_rtt_milliseconds.clone(),
         );
 
         MoqMetrics {
@@ -104,6 +109,7 @@ impl MoqMetrics {
             bytes_received_from_publisher_total,
             bytes_sent_to_subscriber_total,
             active_publishers,
+            quic_rtt_milliseconds
         }
     }
 }
@@ -152,6 +158,23 @@ pub fn increment_active_publishers() {
 pub fn decrement_active_publishers() {
     let state = GLOBAL_METRICS.lock().unwrap();
     state.metrics.active_publishers.dec();
+}
+
+pub fn update_quic_rtt(addr: String, rtt_ms: i64) {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state
+        .metrics
+        .quic_rtt_milliseconds
+        .get_or_create(&ConnectionLabels { addr })
+        .set(rtt_ms);
+}
+
+pub fn remove_quic_rtt(addr: String) {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state
+        .metrics
+        .quic_rtt_milliseconds
+        .remove(&ConnectionLabels { addr });
 }
 
 async fn metrics_handler() -> impl IntoResponse {

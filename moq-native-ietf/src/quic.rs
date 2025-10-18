@@ -1,3 +1,4 @@
+use crate::quic::time::Duration;
 use std::{net, sync::Arc, time};
 
 use anyhow::Context;
@@ -153,6 +154,30 @@ impl Server {
             alpn,
             server_name,
         );
+
+        {
+            // Use a block to clearly separate this logic
+            let stats_conn = conn.clone(); // Clone the quinn::Connection (cheap Arc clone)
+            let addr = stats_conn.remote_address().to_string();
+
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(5));
+                loop {
+                    interval.tick().await;
+
+                    // Check if the connection is still alive using quinn's API
+                    if stats_conn.close_reason().is_some() {
+                        moq_metrics::remove_quic_rtt(addr);
+                        break;
+                    }
+
+                    // Get stats and update the gauge
+                    let rtt_duration = stats_conn.stats().path.rtt;
+                    let rtt_ms = rtt_duration.as_millis() as i64; // Convert to i64 milliseconds
+                    moq_metrics::update_quic_rtt(addr.clone(), rtt_ms); // Call the ms helper
+                }
+            });
+        }
 
         let session = match alpn.as_bytes() {
             web_transport_quinn::ALPN => {
