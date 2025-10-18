@@ -38,6 +38,7 @@ pub struct MoqMetrics {
     pub objects_sent_total: Counter<u64>,
     pub bytes_received_from_publisher_total: Counter<u64>,
     pub bytes_sent_to_subscriber_total: Counter<u64>,
+    pub active_publishers: Gauge<i64>,
 }
 
 // singleton
@@ -55,6 +56,7 @@ impl MoqMetrics {
         let objects_sent_total = Counter::default();
         let bytes_received_from_publisher_total = Counter::default();
         let bytes_sent_to_subscriber_total = Counter::default();
+        let active_publishers = Gauge::default();
 
         // let mut sub_registry = registry.sub_registry_with_prefix("moq_relay");
 
@@ -88,6 +90,11 @@ impl MoqMetrics {
             "Total number of bytes sent by the relay to subscribers.",
             bytes_sent_to_subscriber_total.clone(),
         );
+        registry.register(
+            "moq_relay_active_publishers",
+            "Current number of actibe publishers.",
+            active_publishers.clone(),
+        );
 
         MoqMetrics {
             announced_tracks_total,
@@ -96,6 +103,7 @@ impl MoqMetrics {
             objects_sent_total,
             bytes_received_from_publisher_total,
             bytes_sent_to_subscriber_total,
+            active_publishers,
         }
     }
 }
@@ -134,6 +142,16 @@ pub fn add_bytes_received(count: u64) {
 pub fn add_bytes_sent(count: u64) {
     let state = GLOBAL_METRICS.lock().unwrap();
     state.metrics.bytes_sent_to_subscriber_total.inc_by(count);
+}
+
+pub fn increment_active_publishers() {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.active_publishers.inc();
+}
+
+pub fn decrement_active_publishers() {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.active_publishers.dec();
 }
 
 async fn metrics_handler() -> impl IntoResponse {

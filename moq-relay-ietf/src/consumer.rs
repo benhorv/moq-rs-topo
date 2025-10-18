@@ -5,6 +5,8 @@ use moq_transport::{
     session::{Announced, SessionError, Subscriber},
 };
 
+use scopeguard::guard;
+
 use crate::{Api, Locals, Producer};
 
 #[derive(Clone)]
@@ -31,6 +33,11 @@ impl Consumer {
     }
 
     pub async fn run(mut self) -> Result<(), SessionError> {
+        moq_metrics::increment_active_publishers();
+        let _publisher_guard = guard((), |_| {
+            moq_metrics::decrement_active_publishers();
+        });
+
         let mut tasks = FuturesUnordered::new();
 
         loop {
