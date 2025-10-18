@@ -156,25 +156,35 @@ impl Server {
         );
 
         {
-            // Use a block to clearly separate this logic
-            let stats_conn = conn.clone(); // Clone the quinn::Connection (cheap Arc clone)
+            let stats_conn = conn.clone();
             let addr = stats_conn.remote_address().to_string();
 
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(5));
+                let mut previous_lost_count: u64 = 0;
                 loop {
                     interval.tick().await;
 
-                    // Check if the connection is still alive using quinn's API
+                    // check if connection is alive
                     if stats_conn.close_reason().is_some() {
                         moq_metrics::remove_quic_rtt(addr);
                         break;
                     }
 
-                    // Get stats and update the gauge
-                    let rtt_duration = stats_conn.stats().path.rtt;
-                    let rtt_ms = rtt_duration.as_millis() as i64; // Convert to i64 milliseconds
-                    moq_metrics::update_quic_rtt(addr.clone(), rtt_ms); // Call the ms helper
+                    let path_stats = stats_conn.stats().path;
+
+                    let rtt_duration = path_stats.rtt;
+                    let rtt_ms = rtt_duration.as_millis() as i64;
+                    moq_metrics::update_quic_rtt(addr.clone(), rtt_ms);
+
+                    let current_lost_count = path_stats.lost_packets as u64;
+                    let diff = current_lost_count.saturating_sub(previous_lost_count);
+
+                    if diff > 0 {
+                        moq_metrics::increment_lost_packets_by(addr.clone(), diff);
+                    }
+
+                    previous_lost_count = current_lost_count;
                 }
             });
         }

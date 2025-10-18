@@ -40,6 +40,7 @@ pub struct MoqMetrics {
     pub bytes_sent_to_subscriber_total: Counter<u64>,
     pub active_publishers: Gauge<i64>,
     pub quic_rtt_milliseconds: Family<ConnectionLabels, Gauge<i64>>,
+    pub quic_lost_packets_total: Family<ConnectionLabels, Counter<u64>>,
 }
 
 // pl. log! enum:
@@ -57,6 +58,7 @@ impl MoqMetrics {
         let bytes_sent_to_subscriber_total = Counter::default();
         let active_publishers = Gauge::default();
         let quic_rtt_milliseconds = Family::default();
+        let quic_lost_packets_total: Family<ConnectionLabels, Counter<u64>> = Family::default();
 
         // let mut sub_registry = registry.sub_registry_with_prefix("moq_relay");
 
@@ -100,6 +102,11 @@ impl MoqMetrics {
             "Estimated RTT of an active QUIC connection in milliseconds",
             quic_rtt_milliseconds.clone(),
         );
+        registry.register(
+            "moq_relay_quic_lost_packets_total",
+            "Total number of QUIC packets detected as lost for a connection",
+            quic_lost_packets_total.clone(),
+        );
 
         MoqMetrics {
             announced_tracks_total,
@@ -109,7 +116,8 @@ impl MoqMetrics {
             bytes_received_from_publisher_total,
             bytes_sent_to_subscriber_total,
             active_publishers,
-            quic_rtt_milliseconds
+            quic_rtt_milliseconds,
+            quic_lost_packets_total,
         }
     }
 }
@@ -175,6 +183,18 @@ pub fn remove_quic_rtt(addr: String) {
         .metrics
         .quic_rtt_milliseconds
         .remove(&ConnectionLabels { addr });
+}
+
+pub fn increment_lost_packets_by(addr: String, count: u64) {
+    if count == 0 {
+        return;
+    }
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state
+        .metrics
+        .quic_lost_packets_total
+        .get_or_create(&ConnectionLabels { addr })
+        .inc_by(count);
 }
 
 async fn metrics_handler() -> impl IntoResponse {
