@@ -6,3 +6,5 @@ result
 .vscode
 *.rdb
 */prometheus/data
+*.te
+*.pp

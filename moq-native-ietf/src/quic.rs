@@ -162,6 +162,8 @@ impl Server {
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(5));
                 let mut previous_lost_count: u64 = 0;
+                moq_metrics::update_quic_rtt(addr.clone(), 0);
+                moq_metrics::increment_lost_packets_by(addr.clone(), 0);
                 loop {
                     interval.tick().await;
 

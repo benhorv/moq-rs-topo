@@ -48,6 +48,8 @@ pub struct MoqMetrics {
 
 // TODO: macro!
 
+// különböző komponensekhez namespace
+// cpu, memory stb...
 impl MoqMetrics {
     pub fn new(registry: &mut Registry) -> Self {
         let announced_tracks_total = Counter::default();
