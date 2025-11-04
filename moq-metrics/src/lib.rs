@@ -8,6 +8,8 @@ use once_cell::sync::Lazy;
 use anyhow::Context;
 use axum::{Router, response::IntoResponse, routing::get};
 use prometheus_client::encoding::text::encode;
+use sysinfo::{ProcessesToUpdate, System};
+use std::time::Duration;
 use std::{
     net::SocketAddr,
     sync::{Arc, Mutex},
@@ -41,6 +43,11 @@ pub struct MoqMetrics {
     pub active_publishers: Gauge<i64>,
     pub quic_rtt_milliseconds: Family<ConnectionLabels, Gauge<i64>>,
     pub quic_lost_packets_total: Family<ConnectionLabels, Counter<u64>>,
+    pub process_cpu_usage_percent: Gauge<i64>,
+    pub process_memory_bytes: Gauge<i64>,
+    pub system_cpu_usage_percent: Gauge::<i64>,
+    pub system_memory_total_bytes: Gauge::<i64>,
+    pub system_memory_available_bytes: Gauge::<i64>,
 }
 
 // pl. log! enum:
@@ -61,6 +68,11 @@ impl MoqMetrics {
         let active_publishers = Gauge::default();
         let quic_rtt_milliseconds = Family::default();
         let quic_lost_packets_total: Family<ConnectionLabels, Counter<u64>> = Family::default();
+        let process_cpu_usage_percent = Gauge::default();
+        let process_memory_bytes = Gauge::default();
+        let system_cpu_usage_percent = Gauge::default();
+        let system_memory_total_bytes = Gauge::default();
+        let system_memory_available_bytes = Gauge::default();
 
         // let mut sub_registry = registry.sub_registry_with_prefix("moq_relay");
 
@@ -109,6 +121,31 @@ impl MoqMetrics {
             "Total number of QUIC packets detected as lost for a connection",
             quic_lost_packets_total.clone(),
         );
+        registry.register(
+            "process_cpu_usage_percent",
+            "Current CPU usage of the relay process",
+            process_cpu_usage_percent.clone(),
+        );
+        registry.register(
+            "process_memory_bytes",
+            "Current resident memory usage of the relay process",
+            process_memory_bytes.clone(),
+        );
+        registry.register(
+            "system_memory_available_bytes",
+            "Amount of available bytes in system memory",
+            system_memory_available_bytes.clone(),
+        );
+        registry.register(
+            "system_cpu_usage_percent",
+            "Current CPU usage of the system",
+            system_cpu_usage_percent.clone(),
+        );
+        registry.register(
+            "system_memory_total_bytes",
+            "Current resident memory usage of the system",
+            system_memory_total_bytes.clone(),
+        );
 
         MoqMetrics {
             announced_tracks_total,
@@ -120,6 +157,11 @@ impl MoqMetrics {
             active_publishers,
             quic_rtt_milliseconds,
             quic_lost_packets_total,
+            process_cpu_usage_percent,
+            process_memory_bytes,
+            system_cpu_usage_percent,
+            system_memory_available_bytes,
+            system_memory_total_bytes,
         }
     }
 }
@@ -199,6 +241,27 @@ pub fn increment_lost_packets_by(addr: String, count: u64) {
         .inc_by(count);
 }
 
+pub fn update_process_cpu(percent: i64) {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.process_cpu_usage_percent.set(percent);
+}
+
+pub fn update_process_memory(bytes: i64) {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.process_memory_bytes.set(bytes);
+}
+
+pub fn update_system_cpu(percent: i64) {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.system_cpu_usage_percent.set(percent);
+}
+
+pub fn update_system_memory(available: i64, total: i64) {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.system_memory_available_bytes.set(available);
+    state.metrics.system_memory_total_bytes.set(total);
+}
+
 async fn metrics_handler() -> impl IntoResponse {
     let mut buffer = String::new();
     let state = GLOBAL_METRICS.lock().unwrap();
@@ -225,6 +288,42 @@ pub fn run_server(
         axum::serve(listener, app.into_make_service())
             .await
             .context("Metrics server failed")
+    });
+
+    Ok(task)
+}
+
+pub fn poll_system() -> anyhow::Result<tokio::task::JoinHandle<anyhow::Result<()>>> {
+    let task = tokio::spawn(async {
+        let mut sys = System::new_all();
+        let pid = sysinfo::get_current_pid().expect("Failed to get current PID");
+        let mut interval = tokio::time::interval(Duration::from_secs(5));
+
+        sys.refresh_cpu_all();
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        loop {
+            interval.tick().await;
+
+            sys.refresh_cpu_all();
+            sys.refresh_memory();
+            sys.refresh_processes(ProcessesToUpdate::All, true);
+
+            let cpu_usage: f32 = sys.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32;
+            let available_mem = sys.available_memory();
+            let total_mem = sys.total_memory();
+
+            update_system_cpu(cpu_usage.round() as i64);
+            update_system_memory(available_mem as i64, total_mem as i64);
+
+            if let Some(process) = sys.process(pid) {
+                let process_cpu = (process.cpu_usage() / sys.cpus().len() as f32).round() as i64;
+                let process_mem = process.memory();
+
+                update_process_cpu(process_cpu);
+                update_process_memory(process_mem as i64);
+            }
+        }
     });
 
     Ok(task)

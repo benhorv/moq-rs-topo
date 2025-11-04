@@ -84,6 +84,12 @@ impl Relay {
                 .boxed()
         );
 
+        let system_poller_handle = moq_metrics::poll_system()?;
+        tasks.push(
+            system_poller_handle
+                .map(|res| res.unwrap_or_else(|e| Err(anyhow::anyhow!("System poller task panicked: {}", e))))
+                .boxed()
+        );
         let remotes = self.remotes.map(|(producer, consumer)| {
             tasks.push(producer.run().boxed());
             consumer
