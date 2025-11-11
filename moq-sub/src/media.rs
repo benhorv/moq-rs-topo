@@ -14,6 +14,8 @@ use tokio::{
     task::JoinSet,
 };
 
+use scopeguard::guard;
+
 pub struct Media<O> {
     subscriber: Subscriber,
     broadcast: TracksReader,
@@ -163,6 +165,11 @@ impl<O: AsyncWrite + Send + Unpin + 'static> Media<O> {
     }
 
     async fn recv_track(track: TrackReader, out: Arc<Mutex<O>>) -> anyhow::Result<()> {
+        moq_metrics::increment_subscriber_active_tracks();
+        let _track_guard = guard((), |_| {
+            moq_metrics::decrement_subscriber_active_tracks();
+        });
+
         let name = track.name.clone();
         debug!("track {name}: start");
         if let TrackReaderMode::Subgroups(mut groups) = track.mode().await? {
@@ -199,6 +206,10 @@ impl<O: AsyncWrite + Send + Unpin + 'static> Media<O> {
         while let Some(chunk) = object.read().await? {
             buf.extend_from_slice(&chunk);
         }
+
+        moq_metrics::add_subscriber_objects_received(1);
+        moq_metrics::add_subscriber_bytes_received(buf.len() as u64);
+
         Ok(buf)
     }
 }

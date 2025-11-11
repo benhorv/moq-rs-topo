@@ -8,12 +8,12 @@ use once_cell::sync::Lazy;
 use anyhow::Context;
 use axum::{Router, response::IntoResponse, routing::get};
 use prometheus_client::encoding::text::encode;
-use sysinfo::{ProcessesToUpdate, System};
 use std::time::Duration;
 use std::{
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
+use sysinfo::{ProcessesToUpdate, System};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ConnectionLabels {
@@ -45,9 +45,14 @@ pub struct MoqMetrics {
     pub quic_lost_packets_total: Family<ConnectionLabels, Counter<u64>>,
     pub process_cpu_usage_percent: Gauge<i64>,
     pub process_memory_bytes: Gauge<i64>,
-    pub system_cpu_usage_percent: Gauge::<i64>,
-    pub system_memory_total_bytes: Gauge::<i64>,
-    pub system_memory_available_bytes: Gauge::<i64>,
+    pub system_cpu_usage_percent: Gauge<i64>,
+    pub system_memory_total_bytes: Gauge<i64>,
+    pub system_memory_available_bytes: Gauge<i64>,
+    pub subscriber_objects_received_total: Counter<u64>,
+    pub subscriber_bytes_received_total: Counter<u64>,
+    pub subscriber_active_tracks: Gauge<i64>,
+    pub quic_connections_active: Gauge<i64>,
+    pub quic_sent_packets_total: Family<ConnectionLabels, Counter<u64>>,
 }
 
 // pl. log! enum:
@@ -73,6 +78,11 @@ impl MoqMetrics {
         let system_cpu_usage_percent = Gauge::default();
         let system_memory_total_bytes = Gauge::default();
         let system_memory_available_bytes = Gauge::default();
+        let subscriber_objects_received_total = Counter::default();
+        let subscriber_bytes_received_total = Counter::default();
+        let subscriber_active_tracks = Gauge::default();
+        let quic_connections_active = Gauge::default();
+        let quic_sent_packets_total: Family<ConnectionLabels, Counter<u64>> = Family::default();
 
         // let mut sub_registry = registry.sub_registry_with_prefix("moq_relay");
 
@@ -86,7 +96,7 @@ impl MoqMetrics {
             "Current number of active, announced tracks being tracked by the relay",
             announced_tracks_current.clone(),
         );
-        registry.register(
+        registry.register( // nem egyértelmű
             "moq_relay_active_subscribed_tracks",
             "Current number of active subscribed tracks in a relay",
             active_subscribed_tracks.clone(),
@@ -146,6 +156,31 @@ impl MoqMetrics {
             "Current resident memory usage of the system",
             system_memory_total_bytes.clone(),
         );
+        registry.register(
+            "subscriber_objects_received_total",
+            "Total number of objects received by subscriber",
+            subscriber_objects_received_total.clone(),
+        );
+        registry.register(
+            "subscriber_bytes_received_total",
+            "Total number of bytes received by subscriber",
+            subscriber_bytes_received_total.clone(),
+        );
+        registry.register(
+            "subscriber_active_tracks",
+            "Number of currently active tracks in subscriber",
+            subscriber_active_tracks.clone(),
+        );
+        registry.register(
+            "moq_relay_quic_connections_active",
+            "Current number of active QUIC connections",
+            quic_connections_active.clone(),
+        );
+        registry.register(
+            "moq_relay_quic_sent_packets_total",
+            "Total number of QUIC packets sent for a connection",
+            quic_sent_packets_total.clone(),
+        );
 
         MoqMetrics {
             announced_tracks_total,
@@ -162,6 +197,11 @@ impl MoqMetrics {
             system_cpu_usage_percent,
             system_memory_available_bytes,
             system_memory_total_bytes,
+            subscriber_objects_received_total,
+            subscriber_bytes_received_total,
+            subscriber_active_tracks,
+            quic_connections_active,
+            quic_sent_packets_total,
         }
     }
 }
@@ -194,7 +234,10 @@ pub fn add_objects_sent(count: u64) {
 
 pub fn add_bytes_received(count: u64) {
     let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.bytes_received_from_publisher_total.inc_by(count);
+    state
+        .metrics
+        .bytes_received_from_publisher_total
+        .inc_by(count);
 }
 
 pub fn add_bytes_sent(count: u64) {
@@ -262,6 +305,48 @@ pub fn update_system_memory(available: i64, total: i64) {
     state.metrics.system_memory_total_bytes.set(total);
 }
 
+pub fn add_subscriber_objects_received(count: u64) {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.subscriber_objects_received_total.inc_by(count);
+}
+
+pub fn add_subscriber_bytes_received(count: u64) {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.subscriber_bytes_received_total.inc_by(count);
+}
+
+pub fn increment_subscriber_active_tracks() {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.subscriber_active_tracks.inc();
+}
+
+pub fn decrement_subscriber_active_tracks() {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.subscriber_active_tracks.dec();
+}
+
+pub fn increment_active_connections() {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.quic_connections_active.inc();
+}
+
+pub fn decrement_active_connections() {
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state.metrics.quic_connections_active.dec();
+}
+
+pub fn increment_sent_packets_by(addr: String, count: u64) {
+    if count == 0 {
+        return;
+    }
+    let state = GLOBAL_METRICS.lock().unwrap();
+    state
+        .metrics
+        .quic_sent_packets_total
+        .get_or_create(&ConnectionLabels { addr })
+        .inc_by(count);
+}
+
 async fn metrics_handler() -> impl IntoResponse {
     let mut buffer = String::new();
     let state = GLOBAL_METRICS.lock().unwrap();
@@ -309,7 +394,8 @@ pub fn poll_system() -> anyhow::Result<tokio::task::JoinHandle<anyhow::Result<()
             sys.refresh_memory();
             sys.refresh_processes(ProcessesToUpdate::All, true);
 
-            let cpu_usage: f32 = sys.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32;
+            let cpu_usage: f32 =
+                sys.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32;
             let available_mem = sys.available_memory();
             let total_mem = sys.total_memory();
 

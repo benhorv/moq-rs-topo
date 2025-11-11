@@ -42,3 +42,8 @@ scrape_configs:
       #   labels:
       #     relay_id: 'relay3'
       #     app_port: '4453'
+
+  - job_name: 'moq-subscriber'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['localhost:9094']
