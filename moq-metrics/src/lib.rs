@@ -34,25 +34,25 @@ static GLOBAL_METRICS: Lazy<Arc<Mutex<MetricsState>>> = Lazy::new(|| {
 
 #[derive(Clone)]
 pub struct MoqMetrics {
-    pub announced_tracks_total: Counter<u64>,
+    pub announced_tracks: Counter<u64>,
     pub announced_tracks_current: Gauge<i64>,
     pub active_subscribed_tracks: Gauge<i64>,
-    pub objects_sent_total: Counter<u64>,
-    pub bytes_received_from_publisher_total: Counter<u64>,
-    pub bytes_sent_to_subscriber_total: Counter<u64>,
+    pub objects_sent: Counter<u64>,
+    pub bytes_received_from_publisher: Counter<u64>,
+    pub bytes_sent_to_subscriber: Counter<u64>,
     pub active_publishers: Gauge<i64>,
     pub quic_rtt_milliseconds: Family<ConnectionLabels, Gauge<i64>>,
-    pub quic_lost_packets_total: Family<ConnectionLabels, Counter<u64>>,
+    pub quic_lost_packets: Family<ConnectionLabels, Counter<u64>>,
     pub process_cpu_usage_percent: Gauge<i64>,
     pub process_memory_bytes: Gauge<i64>,
     pub system_cpu_usage_percent: Gauge<i64>,
-    pub system_memory_total_bytes: Gauge<i64>,
+    pub system_memory_bytes: Gauge<i64>,
     pub system_memory_available_bytes: Gauge<i64>,
-    pub subscriber_objects_received_total: Counter<u64>,
-    pub subscriber_bytes_received_total: Counter<u64>,
+    pub subscriber_objects_received: Counter<u64>,
+    pub subscriber_bytes_received: Counter<u64>,
     pub subscriber_active_tracks: Gauge<i64>,
     pub quic_connections_active: Gauge<i64>,
-    pub quic_sent_packets_total: Family<ConnectionLabels, Counter<u64>>,
+    pub quic_sent_packets: Family<ConnectionLabels, Counter<u64>>,
 }
 
 // pl. log! enum:
@@ -64,32 +64,32 @@ pub struct MoqMetrics {
 // cpu, memory stb...
 impl MoqMetrics {
     pub fn new(registry: &mut Registry) -> Self {
-        let announced_tracks_total = Counter::default();
+        let announced_tracks = Counter::default();
         let announced_tracks_current = Gauge::default();
         let active_subscribed_tracks = Gauge::default();
-        let objects_sent_total = Counter::default();
-        let bytes_received_from_publisher_total = Counter::default();
-        let bytes_sent_to_subscriber_total = Counter::default();
+        let objects_sent = Counter::default();
+        let bytes_received_from_publisher = Counter::default();
+        let bytes_sent_to_subscriber = Counter::default();
         let active_publishers = Gauge::default();
         let quic_rtt_milliseconds = Family::default();
-        let quic_lost_packets_total: Family<ConnectionLabels, Counter<u64>> = Family::default();
+        let quic_lost_packets: Family<ConnectionLabels, Counter<u64>> = Family::default();
         let process_cpu_usage_percent = Gauge::default();
         let process_memory_bytes = Gauge::default();
         let system_cpu_usage_percent = Gauge::default();
-        let system_memory_total_bytes = Gauge::default();
+        let system_memory_bytes = Gauge::default();
         let system_memory_available_bytes = Gauge::default();
-        let subscriber_objects_received_total = Counter::default();
-        let subscriber_bytes_received_total = Counter::default();
+        let subscriber_objects_received = Counter::default();
+        let subscriber_bytes_received = Counter::default();
         let subscriber_active_tracks = Gauge::default();
         let quic_connections_active = Gauge::default();
-        let quic_sent_packets_total: Family<ConnectionLabels, Counter<u64>> = Family::default();
+        let quic_sent_packets: Family<ConnectionLabels, Counter<u64>> = Family::default();
 
         // let mut sub_registry = registry.sub_registry_with_prefix("moq_relay");
 
         registry.register(
-            "moq_relay_announced_tracks_total",
+            "moq_relay_announced_tracks",
             "Total number of tracks ever announced to or via this relay",
-            announced_tracks_total.clone(),
+            announced_tracks.clone(),
         );
         registry.register(
             "moq_relay_announced_tracks_current",
@@ -102,19 +102,19 @@ impl MoqMetrics {
             active_subscribed_tracks.clone(),
         );
         registry.register(
-            "moq_relay_objects_sent_total",
+            "moq_relay_objects_sent",
             "Total number of objects sent from the relay",
-            objects_sent_total.clone(),
+            objects_sent.clone(),
         );
         registry.register(
-            "moq_relay_bytes_received_from_publisher_total",
+            "moq_relay_bytes_received_from_publisher",
             "Total number of bytes received by the relay from publishers",
-            bytes_received_from_publisher_total.clone(),
+            bytes_received_from_publisher.clone(),
         );
         registry.register(
-            "moq_relay_bytes_sent_to_subscriber_total",
+            "moq_relay_bytes_sent_to_subscriber",
             "Total number of bytes sent by the relay to subscribers",
-            bytes_sent_to_subscriber_total.clone(),
+            bytes_sent_to_subscriber.clone(),
         );
         registry.register(
             "moq_relay_active_publishers",
@@ -127,9 +127,9 @@ impl MoqMetrics {
             quic_rtt_milliseconds.clone(),
         );
         registry.register(
-            "moq_relay_quic_lost_packets_total",
+            "moq_relay_quic_lost_packets",
             "Total number of QUIC packets detected as lost for a connection",
-            quic_lost_packets_total.clone(),
+            quic_lost_packets.clone(),
         );
         registry.register(
             "process_cpu_usage_percent",
@@ -152,19 +152,19 @@ impl MoqMetrics {
             system_cpu_usage_percent.clone(),
         );
         registry.register(
-            "system_memory_total_bytes",
+            "system_memory_bytes",
             "Current resident memory usage of the system",
-            system_memory_total_bytes.clone(),
+            system_memory_bytes.clone(),
         );
         registry.register(
-            "subscriber_objects_received_total",
+            "subscriber_objects_received",
             "Total number of objects received by subscriber",
-            subscriber_objects_received_total.clone(),
+            subscriber_objects_received.clone(),
         );
         registry.register(
-            "subscriber_bytes_received_total",
+            "subscriber_bytes_received",
             "Total number of bytes received by subscriber",
-            subscriber_bytes_received_total.clone(),
+            subscriber_bytes_received.clone(),
         );
         registry.register(
             "subscriber_active_tracks",
@@ -177,38 +177,38 @@ impl MoqMetrics {
             quic_connections_active.clone(),
         );
         registry.register(
-            "moq_relay_quic_sent_packets_total",
+            "moq_relay_quic_sent_packets",
             "Total number of QUIC packets sent for a connection",
-            quic_sent_packets_total.clone(),
+            quic_sent_packets.clone(),
         );
 
         MoqMetrics {
-            announced_tracks_total,
+            announced_tracks,
             announced_tracks_current,
             active_subscribed_tracks,
-            objects_sent_total,
-            bytes_received_from_publisher_total,
-            bytes_sent_to_subscriber_total,
+            objects_sent,
+            bytes_received_from_publisher,
+            bytes_sent_to_subscriber,
             active_publishers,
             quic_rtt_milliseconds,
-            quic_lost_packets_total,
+            quic_lost_packets,
             process_cpu_usage_percent,
             process_memory_bytes,
             system_cpu_usage_percent,
             system_memory_available_bytes,
-            system_memory_total_bytes,
-            subscriber_objects_received_total,
-            subscriber_bytes_received_total,
+            system_memory_bytes,
+            subscriber_objects_received,
+            subscriber_bytes_received,
             subscriber_active_tracks,
             quic_connections_active,
-            quic_sent_packets_total,
+            quic_sent_packets,
         }
     }
 }
 
 pub fn increment_announced_tracks() {
     let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.announced_tracks_total.inc();
+    state.metrics.announced_tracks.inc();
     state.metrics.announced_tracks_current.inc();
 }
 
@@ -229,20 +229,20 @@ pub fn decrement_active_subscribed_tracks() {
 
 pub fn add_objects_sent(count: u64) {
     let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.objects_sent_total.inc_by(count);
+    state.metrics.objects_sent.inc_by(count);
 }
 
 pub fn add_bytes_received(count: u64) {
     let state = GLOBAL_METRICS.lock().unwrap();
     state
         .metrics
-        .bytes_received_from_publisher_total
+        .bytes_received_from_publisher
         .inc_by(count);
 }
 
 pub fn add_bytes_sent(count: u64) {
     let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.bytes_sent_to_subscriber_total.inc_by(count);
+    state.metrics.bytes_sent_to_subscriber.inc_by(count);
 }
 
 pub fn increment_active_publishers() {
@@ -279,7 +279,7 @@ pub fn increment_lost_packets_by(addr: String, count: u64) {
     let state = GLOBAL_METRICS.lock().unwrap();
     state
         .metrics
-        .quic_lost_packets_total
+        .quic_lost_packets
         .get_or_create(&ConnectionLabels { addr })
         .inc_by(count);
 }
@@ -302,17 +302,17 @@ pub fn update_system_cpu(percent: i64) {
 pub fn update_system_memory(available: i64, total: i64) {
     let state = GLOBAL_METRICS.lock().unwrap();
     state.metrics.system_memory_available_bytes.set(available);
-    state.metrics.system_memory_total_bytes.set(total);
+    state.metrics.system_memory_bytes.set(total);
 }
 
 pub fn add_subscriber_objects_received(count: u64) {
     let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.subscriber_objects_received_total.inc_by(count);
+    state.metrics.subscriber_objects_received.inc_by(count);
 }
 
 pub fn add_subscriber_bytes_received(count: u64) {
     let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.subscriber_bytes_received_total.inc_by(count);
+    state.metrics.subscriber_bytes_received.inc_by(count);
 }
 
 pub fn increment_subscriber_active_tracks() {
@@ -342,7 +342,7 @@ pub fn increment_sent_packets_by(addr: String, count: u64) {
     let state = GLOBAL_METRICS.lock().unwrap();
     state
         .metrics
-        .quic_sent_packets_total
+        .quic_sent_packets
         .get_or_create(&ConnectionLabels { addr })
         .inc_by(count);
 }
