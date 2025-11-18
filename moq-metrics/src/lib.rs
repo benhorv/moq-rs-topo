@@ -33,182 +33,56 @@ struct MetricsState {
 static GLOBAL_METRICS: Lazy<Arc<Mutex<MetricsState>>> = Lazy::new(|| {
     let mut registry = Registry::default();
     let metrics = MoqMetrics::new(&mut registry);
-
     Arc::new(Mutex::new(MetricsState { registry, metrics }))
 });
 
-#[derive(Clone)]
-pub struct MoqMetrics {
-    pub announced_tracks: Counter<u64>,
-    pub announced_tracks_current: Gauge<i64>,
-    pub active_subscribed_tracks: Family<StreamLabels, Gauge<i64>>,
-    pub objects_sent: Counter<u64>,
-    pub bytes_received_from_publisher: Counter<u64>,
-    pub bytes_sent_to_subscriber: Counter<u64>,
-    pub active_publishers: Gauge<i64>,
-    pub quic_rtt_milliseconds: Family<ConnectionLabels, Gauge<i64>>,
-    pub quic_lost_packets: Family<ConnectionLabels, Counter<u64>>,
-    pub process_cpu_usage_percent: Gauge<i64>,
-    pub process_memory_bytes: Gauge<i64>,
-    pub system_cpu_usage_percent: Gauge<i64>,
-    pub system_memory_bytes: Gauge<i64>,
-    pub system_memory_available_bytes: Gauge<i64>,
-    pub subscriber_objects_received: Counter<u64>,
-    pub subscriber_bytes_received: Counter<u64>,
-    pub subscriber_active_tracks: Gauge<i64>,
-    pub quic_connections_active: Gauge<i64>,
-    pub quic_sent_packets: Family<ConnectionLabels, Counter<u64>>,
+macro_rules! define_metrics {
+    (
+        $($field:ident: $type:ty, $name:literal, $help:literal),* $(,)?
+    ) => {
+        #[derive(Clone)]
+        pub struct MoqMetrics {
+            $(pub $field: $type,)*
+        }
+
+        impl MoqMetrics {
+            pub fn new(registry: &mut Registry) -> Self {
+                $(
+                    let $field = <$type>::default();
+                    registry.register($name, $help, $field.clone());
+                )*
+                Self { $($field,)* }
+            }
+        }
+    };
 }
 
-// pl. log! enum:
-// quic impl-ből lekérni a belső számlálót (package loss / quic kapcsolat (label valamivel))
+define_metrics! {
+    announced_tracks: Counter<u64>, "moq_relay_announced_tracks", "Total tracks ever announced",
+    announced_tracks_current: Gauge<i64>, "moq_relay_announced_tracks_current", "Current active announced tracks",
+    active_subscribed_tracks: Family<StreamLabels, Gauge<i64>>, "moq_relay_active_subscribed_tracks", "Active subscribed tracks by namespace",
 
-// TODO: macro!
+    objects_sent: Counter<u64>, "moq_relay_objects_sent", "Total objects sent",
+    bytes_received_from_publisher: Counter<u64>, "moq_relay_bytes_received_from_publisher", "Total bytes received from publishers",
+    bytes_sent_to_subscriber: Counter<u64>, "moq_relay_bytes_sent_to_subscriber", "Total bytes sent to subscribers",
 
-// különböző komponensekhez namespace
-// cpu, memory stb...
-impl MoqMetrics {
-    pub fn new(registry: &mut Registry) -> Self {
-        let announced_tracks = Counter::default();
-        let announced_tracks_current = Gauge::default();
-        let active_subscribed_tracks = Family::default();
-        let objects_sent = Counter::default();
-        let bytes_received_from_publisher = Counter::default();
-        let bytes_sent_to_subscriber = Counter::default();
-        let active_publishers = Gauge::default();
-        let quic_rtt_milliseconds = Family::default();
-        let quic_lost_packets: Family<ConnectionLabels, Counter<u64>> = Family::default();
-        let process_cpu_usage_percent = Gauge::default();
-        let process_memory_bytes = Gauge::default();
-        let system_cpu_usage_percent = Gauge::default();
-        let system_memory_bytes = Gauge::default();
-        let system_memory_available_bytes = Gauge::default();
-        let subscriber_objects_received = Counter::default();
-        let subscriber_bytes_received = Counter::default();
-        let subscriber_active_tracks = Gauge::default();
-        let quic_connections_active = Gauge::default();
-        let quic_sent_packets: Family<ConnectionLabels, Counter<u64>> = Family::default();
+    active_publishers: Gauge<i64>, "moq_relay_active_publishers", "Current active publishers",
 
-        // let mut sub_registry = registry.sub_registry_with_prefix("moq_relay");
+    quic_rtt_milliseconds: Family<ConnectionLabels, Gauge<i64>>, "moq_relay_quic_rtt_milliseconds", "QUIC RTT in ms",
+    quic_lost_packets: Family<ConnectionLabels, Counter<u64>>, "moq_relay_quic_lost_packets", "Total QUIC lost packets",
+    quic_connections_active: Gauge<i64>, "moq_relay_quic_connections_active", "Current active QUIC connections",
+    quic_sent_packets: Family<ConnectionLabels, Counter<u64>>, "moq_relay_quic_sent_packets", "Total QUIC sent packets",
 
-        registry.register(
-            "moq_relay_announced_tracks",
-            "Total number of tracks ever announced to or via this relay",
-            announced_tracks.clone(),
-        );
-        registry.register(
-            "moq_relay_announced_tracks_current",
-            "Current number of active, announced tracks being tracked by the relay",
-            announced_tracks_current.clone(),
-        );
-        registry.register( // nem egyértelmű
-            "moq_relay_active_subscribed_tracks",
-            "Current number of subscribed tracks in the relay by namespace.",
-            active_subscribed_tracks.clone(),
-        );
-        registry.register(
-            "moq_relay_objects_sent",
-            "Total number of objects sent from the relay",
-            objects_sent.clone(),
-        );
-        registry.register(
-            "moq_relay_bytes_received_from_publisher",
-            "Total number of bytes received by the relay from publishers",
-            bytes_received_from_publisher.clone(),
-        );
-        registry.register(
-            "moq_relay_bytes_sent_to_subscriber",
-            "Total number of bytes sent by the relay to subscribers",
-            bytes_sent_to_subscriber.clone(),
-        );
-        registry.register(
-            "moq_relay_active_publishers",
-            "Current number of actibe publishers",
-            active_publishers.clone(),
-        );
-        registry.register(
-            "moq_relay_quic_rtt_milliseconds",
-            "Estimated RTT of an active QUIC connection in milliseconds",
-            quic_rtt_milliseconds.clone(),
-        );
-        registry.register(
-            "moq_relay_quic_lost_packets",
-            "Total number of QUIC packets detected as lost for a connection",
-            quic_lost_packets.clone(),
-        );
-        registry.register(
-            "process_cpu_usage_percent",
-            "Current CPU usage of the relay process",
-            process_cpu_usage_percent.clone(),
-        );
-        registry.register(
-            "process_memory_bytes",
-            "Current resident memory usage of the relay process",
-            process_memory_bytes.clone(),
-        );
-        registry.register(
-            "system_memory_available_bytes",
-            "Amount of available bytes in system memory",
-            system_memory_available_bytes.clone(),
-        );
-        registry.register(
-            "system_cpu_usage_percent",
-            "Current CPU usage of the system",
-            system_cpu_usage_percent.clone(),
-        );
-        registry.register(
-            "system_memory_bytes",
-            "Current resident memory usage of the system",
-            system_memory_bytes.clone(),
-        );
-        registry.register(
-            "subscriber_objects_received",
-            "Total number of objects received by subscriber",
-            subscriber_objects_received.clone(),
-        );
-        registry.register(
-            "subscriber_bytes_received",
-            "Total number of bytes received by subscriber",
-            subscriber_bytes_received.clone(),
-        );
-        registry.register(
-            "subscriber_active_tracks",
-            "Number of currently active tracks in subscriber",
-            subscriber_active_tracks.clone(),
-        );
-        registry.register(
-            "moq_relay_quic_connections_active",
-            "Current number of active QUIC connections",
-            quic_connections_active.clone(),
-        );
-        registry.register(
-            "moq_relay_quic_sent_packets",
-            "Total number of QUIC packets sent for a connection",
-            quic_sent_packets.clone(),
-        );
+    process_cpu_usage_percent: Gauge<i64>, "process_cpu_usage_percent", "Relay process CPU usage",
+    process_memory_bytes: Gauge<i64>, "process_memory_bytes", "Relay process memory usage",
 
-        MoqMetrics {
-            announced_tracks,
-            announced_tracks_current,
-            active_subscribed_tracks,
-            objects_sent,
-            bytes_received_from_publisher,
-            bytes_sent_to_subscriber,
-            active_publishers,
-            quic_rtt_milliseconds,
-            quic_lost_packets,
-            process_cpu_usage_percent,
-            process_memory_bytes,
-            system_cpu_usage_percent,
-            system_memory_available_bytes,
-            system_memory_bytes,
-            subscriber_objects_received,
-            subscriber_bytes_received,
-            subscriber_active_tracks,
-            quic_connections_active,
-            quic_sent_packets,
-        }
-    }
+    system_cpu_usage_percent: Gauge<i64>, "system_cpu_usage_percent", "System CPU usage",
+    system_memory_bytes: Gauge<i64>, "system_memory_bytes", "System resident memory usage",
+    system_memory_available_bytes: Gauge<i64>, "system_memory_available_bytes", "System available memory",
+
+    subscriber_objects_received: Counter<u64>, "subscriber_objects_received", "Objects received by subscriber",
+    subscriber_bytes_received: Counter<u64>, "subscriber_bytes_received", "Bytes received by subscriber",
+    subscriber_active_tracks: Gauge<i64>, "subscriber_active_tracks", "Active tracks in subscriber"
 }
 
 pub fn increment_announced_tracks() {
