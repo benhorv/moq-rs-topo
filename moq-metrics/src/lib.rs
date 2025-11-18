@@ -25,9 +25,12 @@ pub struct StreamLabels {
     pub namespace: String,
 }
 
+type ScrapeCallback = Box<dyn Fn() -> bool + Send + Sync>;
+
 pub struct MetricsState {
     pub registry: Mutex<Registry>,
     pub metrics: MoqMetrics,
+    callbacks: Mutex<Vec<ScrapeCallback>>,
 }
 
 static GLOBAL_METRICS: Lazy<MetricsState> = Lazy::new(|| {
@@ -37,6 +40,7 @@ static GLOBAL_METRICS: Lazy<MetricsState> = Lazy::new(|| {
     MetricsState {
         registry: Mutex::new(registry),
         metrics,
+        callbacks: Mutex::new(Vec::new()),
     }
 });
 
@@ -205,7 +209,21 @@ pub fn decrement_active_connections() {
     GLOBAL_METRICS.metrics.quic_connections_active.dec();
 }
 
+pub fn add_scrape_callback<F>(callback: F)
+where
+    F: Fn() -> bool + Send + Sync + 'static,
+{
+    GLOBAL_METRICS.callbacks.lock().unwrap().push(Box::new(callback));
+}
+
 async fn metrics_handler() -> impl IntoResponse {
+    {
+        let mut callbacks = GLOBAL_METRICS.callbacks.lock().unwrap();
+        callbacks.retain(|callback| {
+            callback()
+        });
+    }
+
     let mut buffer = String::new();
     let registry: std::sync::MutexGuard<'_, Registry> = GLOBAL_METRICS.registry.lock().unwrap();
     encode(&mut buffer, &registry).unwrap();
