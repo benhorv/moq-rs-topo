@@ -158,25 +158,27 @@ impl Server {
         moq_metrics::increment_active_connections();
 
         {
-
             let stats_conn = conn.clone();
             let addr = stats_conn.remote_address().to_string();
 
-            tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(5));
-                loop {
-                    interval.tick().await;
-                    if stats_conn.close_reason().is_some() {
-                        moq_metrics::remove_quic_rtt(addr.clone());
-                        moq_metrics::decrement_active_connections();
-                        break;
-                    }
-                    let path_stats = stats_conn.stats().path;
-                    let rtt_ms = path_stats.rtt.as_millis() as i64;
-                    moq_metrics::update_quic_rtt(addr.clone(), rtt_ms);
-                    moq_metrics::update_lost_packets(addr.clone(), path_stats.lost_packets);
-                    moq_metrics::update_sent_packets(addr.clone(), path_stats.sent_packets);
+            moq_metrics::add_scrape_callback(move || {
+
+                // check if connection is dead
+                if stats_conn.close_reason().is_some() {
+                    moq_metrics::remove_quic_rtt(addr.clone());
+                    moq_metrics::decrement_active_connections();
+
+                    return false;
                 }
+
+                let path_stats = stats_conn.stats().path;
+
+                let rtt_ms = path_stats.rtt.as_millis() as i64;
+                moq_metrics::update_quic_rtt(addr.clone(), rtt_ms);
+                moq_metrics::update_lost_packets(addr.clone(), path_stats.lost_packets);
+                moq_metrics::update_sent_packets(addr.clone(), path_stats.sent_packets);
+
+                return true;
             });
         }
 
