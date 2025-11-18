@@ -52,9 +52,10 @@ impl Producer {
     }
 
     async fn serve(self, subscribe: Subscribed) -> Result<(), anyhow::Error> {
-        moq_metrics::increment_active_subscribed_tracks();
-        let _subscriber_guard = guard((), |_| {
-            moq_metrics::decrement_active_subscribed_tracks();
+        let ns = subscribe.namespace.to_string();
+        moq_metrics::increment_active_subscribed_tracks(ns.clone());
+        let _subscriber_guard = guard((), move |_| {
+            moq_metrics::decrement_active_subscribed_tracks(ns);
         });
         let mut track_to_serve: Option<TrackReader> = None;
 

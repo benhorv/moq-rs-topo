@@ -20,6 +20,11 @@ pub struct ConnectionLabels {
     pub addr: String,
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub struct StreamLabels {
+    pub namespace: String,
+}
+
 struct MetricsState {
     registry: Registry,
     metrics: MoqMetrics,
@@ -36,7 +41,7 @@ static GLOBAL_METRICS: Lazy<Arc<Mutex<MetricsState>>> = Lazy::new(|| {
 pub struct MoqMetrics {
     pub announced_tracks: Counter<u64>,
     pub announced_tracks_current: Gauge<i64>,
-    pub active_subscribed_tracks: Gauge<i64>,
+    pub active_subscribed_tracks: Family<StreamLabels, Gauge<i64>>,
     pub objects_sent: Counter<u64>,
     pub bytes_received_from_publisher: Counter<u64>,
     pub bytes_sent_to_subscriber: Counter<u64>,
@@ -66,7 +71,7 @@ impl MoqMetrics {
     pub fn new(registry: &mut Registry) -> Self {
         let announced_tracks = Counter::default();
         let announced_tracks_current = Gauge::default();
-        let active_subscribed_tracks = Gauge::default();
+        let active_subscribed_tracks = Family::default();
         let objects_sent = Counter::default();
         let bytes_received_from_publisher = Counter::default();
         let bytes_sent_to_subscriber = Counter::default();
@@ -98,7 +103,7 @@ impl MoqMetrics {
         );
         registry.register( // nem egyértelmű
             "moq_relay_active_subscribed_tracks",
-            "Current number of active subscribed tracks in a relay",
+            "Current number of subscribed tracks in the relay by namespace.",
             active_subscribed_tracks.clone(),
         );
         registry.register(
@@ -217,14 +222,22 @@ pub fn decrement_announced_tracks() {
     state.metrics.announced_tracks_current.dec();
 }
 
-pub fn increment_active_subscribed_tracks() {
+pub fn increment_active_subscribed_tracks(namespace: String) {
     let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.active_subscribed_tracks.inc();
+    state
+        .metrics
+        .active_subscribed_tracks
+        .get_or_create(&StreamLabels { namespace })
+        .inc();
 }
 
-pub fn decrement_active_subscribed_tracks() {
+pub fn decrement_active_subscribed_tracks(namespace: String) {
     let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.active_subscribed_tracks.dec();
+    state
+        .metrics
+        .active_subscribed_tracks
+        .get_or_create(&StreamLabels { namespace })
+        .dec();
 }
 
 pub fn add_objects_sent(count: u64) {
