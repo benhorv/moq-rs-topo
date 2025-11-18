@@ -164,42 +164,18 @@ impl Server {
 
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(5));
-                let mut previous_lost_count: u64 = 0;
-                let mut previous_sent_count: u64 = 0;
-                moq_metrics::update_quic_rtt(addr.clone(), 0);
-                moq_metrics::increment_lost_packets_by(addr.clone(), 0);
-                moq_metrics::increment_sent_packets_by(addr.clone(), 0);
                 loop {
                     interval.tick().await;
-
-                    // check if connection is alive
                     if stats_conn.close_reason().is_some() {
-                        moq_metrics::remove_quic_rtt(addr);
+                        moq_metrics::remove_quic_rtt(addr.clone());
                         moq_metrics::decrement_active_connections();
                         break;
                     }
-
                     let path_stats = stats_conn.stats().path;
-
-                    let rtt_duration = path_stats.rtt;
-                    let rtt_ms = rtt_duration.as_millis() as i64;
+                    let rtt_ms = path_stats.rtt.as_millis() as i64;
                     moq_metrics::update_quic_rtt(addr.clone(), rtt_ms);
-                    let current_lost_count = path_stats.lost_packets as u64;
-                    let lost_diff = current_lost_count.saturating_sub(previous_lost_count);
-
-                    if lost_diff > 0 {
-                        moq_metrics::increment_lost_packets_by(addr.clone(), lost_diff);
-                    }
-
-                    previous_lost_count = current_lost_count;
-
-                    let current_sent_count = path_stats.sent_packets;
-                    let sent_diff = current_sent_count.saturating_sub(previous_sent_count);
-
-                    if sent_diff > 0 {
-                        moq_metrics::increment_sent_packets_by(addr.clone(), sent_diff);
-                    }
-                    previous_sent_count = current_sent_count;
+                    moq_metrics::update_lost_packets(addr.clone(), path_stats.lost_packets);
+                    moq_metrics::update_sent_packets(addr.clone(), path_stats.sent_packets);
                 }
             });
         }

@@ -73,9 +73,9 @@ define_metrics! {
     active_publishers: Gauge<i64>, "moq_relay_active_publishers", "Current active publishers",
 
     quic_rtt_milliseconds: Family<ConnectionLabels, Gauge<i64>>, "moq_relay_quic_rtt_milliseconds", "QUIC RTT in ms",
-    quic_lost_packets: Family<ConnectionLabels, Counter<u64>>, "moq_relay_quic_lost_packets", "Total QUIC lost packets",
     quic_connections_active: Gauge<i64>, "moq_relay_quic_connections_active", "Current active QUIC connections",
-    quic_sent_packets: Family<ConnectionLabels, Counter<u64>>, "moq_relay_quic_sent_packets", "Total QUIC sent packets",
+    quic_lost_packets: Family<ConnectionLabels, Gauge<i64>>, "moq_relay_quic_lost_packets", "Total QUIC lost packets (Cumulative)",
+    quic_sent_packets: Family<ConnectionLabels, Gauge<i64>>, "moq_relay_quic_sent_packets", "Total QUIC sent packets (Cumulative)",
 
     process_cpu_usage_percent: Gauge<i64>, "process_cpu_usage_percent", "Relay process CPU usage",
     process_memory_bytes: Gauge<i64>, "process_memory_bytes", "Relay process memory usage",
@@ -152,15 +152,16 @@ pub fn remove_quic_rtt(addr: String) {
         .remove(&ConnectionLabels { addr });
 }
 
-pub fn increment_lost_packets_by(addr: String, count: u64) {
-    if count == 0 {
-        return;
-    }
-    GLOBAL_METRICS
-        .metrics
-        .quic_lost_packets
+pub fn update_lost_packets(addr: String, count: u64) {
+    GLOBAL_METRICS.metrics.quic_lost_packets
         .get_or_create(&ConnectionLabels { addr })
-        .inc_by(count);
+        .set(count as i64);
+}
+
+pub fn update_sent_packets(addr: String, count: u64) {
+    GLOBAL_METRICS.metrics.quic_sent_packets
+        .get_or_create(&ConnectionLabels { addr })
+        .set(count as i64);
 }
 
 pub fn update_process_cpu(percent: i64) {
@@ -202,17 +203,6 @@ pub fn increment_active_connections() {
 
 pub fn decrement_active_connections() {
     GLOBAL_METRICS.metrics.quic_connections_active.dec();
-}
-
-pub fn increment_sent_packets_by(addr: String, count: u64) {
-    if count == 0 {
-        return;
-    }
-    GLOBAL_METRICS
-        .metrics
-        .quic_sent_packets
-        .get_or_create(&ConnectionLabels { addr })
-        .inc_by(count);
 }
 
 async fn metrics_handler() -> impl IntoResponse {
