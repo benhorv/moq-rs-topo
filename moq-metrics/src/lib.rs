@@ -11,7 +11,7 @@ use prometheus_client::encoding::text::encode;
 use std::time::Duration;
 use std::{
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::Mutex,
 };
 use sysinfo::{ProcessesToUpdate, System};
 
@@ -25,15 +25,19 @@ pub struct StreamLabels {
     pub namespace: String,
 }
 
-struct MetricsState {
-    registry: Registry,
-    metrics: MoqMetrics,
+pub struct MetricsState {
+    pub registry: Mutex<Registry>,
+    pub metrics: MoqMetrics,
 }
 
-static GLOBAL_METRICS: Lazy<Arc<Mutex<MetricsState>>> = Lazy::new(|| {
+static GLOBAL_METRICS: Lazy<MetricsState> = Lazy::new(|| {
     let mut registry = Registry::default();
     let metrics = MoqMetrics::new(&mut registry);
-    Arc::new(Mutex::new(MetricsState { registry, metrics }))
+
+    MetricsState {
+        registry: Mutex::new(registry),
+        metrics,
+    }
 });
 
 macro_rules! define_metrics {
@@ -86,19 +90,16 @@ define_metrics! {
 }
 
 pub fn increment_announced_tracks() {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.announced_tracks.inc();
-    state.metrics.announced_tracks_current.inc();
+    GLOBAL_METRICS.metrics.announced_tracks.inc();
+    GLOBAL_METRICS.metrics.announced_tracks_current.inc();
 }
 
 pub fn decrement_announced_tracks() {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.announced_tracks_current.dec();
+    GLOBAL_METRICS.metrics.announced_tracks_current.dec();
 }
 
 pub fn increment_active_subscribed_tracks(namespace: String) {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state
+    GLOBAL_METRICS
         .metrics
         .active_subscribed_tracks
         .get_or_create(&StreamLabels { namespace })
@@ -106,8 +107,7 @@ pub fn increment_active_subscribed_tracks(namespace: String) {
 }
 
 pub fn decrement_active_subscribed_tracks(namespace: String) {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state
+    GLOBAL_METRICS
         .metrics
         .active_subscribed_tracks
         .get_or_create(&StreamLabels { namespace })
@@ -115,36 +115,30 @@ pub fn decrement_active_subscribed_tracks(namespace: String) {
 }
 
 pub fn add_objects_sent(count: u64) {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.objects_sent.inc_by(count);
+    GLOBAL_METRICS.metrics.objects_sent.inc_by(count);
 }
 
 pub fn add_bytes_received(count: u64) {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state
+    GLOBAL_METRICS
         .metrics
         .bytes_received_from_publisher
         .inc_by(count);
 }
 
 pub fn add_bytes_sent(count: u64) {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.bytes_sent_to_subscriber.inc_by(count);
+    GLOBAL_METRICS.metrics.bytes_sent_to_subscriber.inc_by(count);
 }
 
 pub fn increment_active_publishers() {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.active_publishers.inc();
+    GLOBAL_METRICS.metrics.active_publishers.inc();
 }
 
 pub fn decrement_active_publishers() {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.active_publishers.dec();
+    GLOBAL_METRICS.metrics.active_publishers.dec();
 }
 
 pub fn update_quic_rtt(addr: String, rtt_ms: i64) {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state
+    GLOBAL_METRICS
         .metrics
         .quic_rtt_milliseconds
         .get_or_create(&ConnectionLabels { addr })
@@ -152,8 +146,7 @@ pub fn update_quic_rtt(addr: String, rtt_ms: i64) {
 }
 
 pub fn remove_quic_rtt(addr: String) {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state
+    GLOBAL_METRICS
         .metrics
         .quic_rtt_milliseconds
         .remove(&ConnectionLabels { addr });
@@ -163,8 +156,7 @@ pub fn increment_lost_packets_by(addr: String, count: u64) {
     if count == 0 {
         return;
     }
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state
+    GLOBAL_METRICS
         .metrics
         .quic_lost_packets
         .get_or_create(&ConnectionLabels { addr })
@@ -172,62 +164,51 @@ pub fn increment_lost_packets_by(addr: String, count: u64) {
 }
 
 pub fn update_process_cpu(percent: i64) {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.process_cpu_usage_percent.set(percent);
+    GLOBAL_METRICS.metrics.process_cpu_usage_percent.set(percent);
 }
 
 pub fn update_process_memory(bytes: i64) {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.process_memory_bytes.set(bytes);
+    GLOBAL_METRICS.metrics.process_memory_bytes.set(bytes);
 }
 
 pub fn update_system_cpu(percent: i64) {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.system_cpu_usage_percent.set(percent);
+    GLOBAL_METRICS.metrics.system_cpu_usage_percent.set(percent);
 }
 
 pub fn update_system_memory(available: i64, total: i64) {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.system_memory_available_bytes.set(available);
-    state.metrics.system_memory_bytes.set(total);
+    GLOBAL_METRICS.metrics.system_memory_available_bytes.set(available);
+    GLOBAL_METRICS.metrics.system_memory_bytes.set(total);
 }
 
 pub fn add_subscriber_objects_received(count: u64) {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.subscriber_objects_received.inc_by(count);
+    GLOBAL_METRICS.metrics.subscriber_objects_received.inc_by(count);
 }
 
 pub fn add_subscriber_bytes_received(count: u64) {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.subscriber_bytes_received.inc_by(count);
+    GLOBAL_METRICS.metrics.subscriber_bytes_received.inc_by(count);
 }
 
 pub fn increment_subscriber_active_tracks() {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.subscriber_active_tracks.inc();
+    GLOBAL_METRICS.metrics.subscriber_active_tracks.inc();
 }
 
 pub fn decrement_subscriber_active_tracks() {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.subscriber_active_tracks.dec();
+    GLOBAL_METRICS.metrics.subscriber_active_tracks.dec();
 }
 
 pub fn increment_active_connections() {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.quic_connections_active.inc();
+    GLOBAL_METRICS.metrics.quic_connections_active.inc();
 }
 
 pub fn decrement_active_connections() {
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state.metrics.quic_connections_active.dec();
+    GLOBAL_METRICS.metrics.quic_connections_active.dec();
 }
 
 pub fn increment_sent_packets_by(addr: String, count: u64) {
     if count == 0 {
         return;
     }
-    let state = GLOBAL_METRICS.lock().unwrap();
-    state
+    GLOBAL_METRICS
         .metrics
         .quic_sent_packets
         .get_or_create(&ConnectionLabels { addr })
@@ -236,8 +217,8 @@ pub fn increment_sent_packets_by(addr: String, count: u64) {
 
 async fn metrics_handler() -> impl IntoResponse {
     let mut buffer = String::new();
-    let state = GLOBAL_METRICS.lock().unwrap();
-    encode(&mut buffer, &state.registry).unwrap();
+    let registry: std::sync::MutexGuard<'_, Registry> = GLOBAL_METRICS.registry.lock().unwrap();
+    encode(&mut buffer, &registry).unwrap();
     buffer
 }
 
