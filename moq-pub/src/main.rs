@@ -37,6 +37,10 @@ pub struct Cli {
     /// The TLS configuration.
     #[command(flatten)]
     pub tls: moq_native_ietf::tls::Args,
+
+    /// Listen for metrics on the given address.
+    #[arg(long)]
+    pub metrics_bind: Option<net::SocketAddr>,
 }
 
 #[tokio::main]
@@ -50,6 +54,17 @@ async fn main() -> anyhow::Result<()> {
     tracing::subscriber::set_global_default(tracer).unwrap();
 
     let cli = Cli::parse();
+
+    let _system_poller = if let Some(metrics_bind) = cli.metrics_bind {
+        tokio::spawn(async move {
+            if let Err(e) = moq_metrics::run_server(metrics_bind) {
+                log::error!("failed to start metrics server: {}", e);
+            }
+        });
+        Some(moq_metrics::poll_system()?)
+    } else {
+        None
+    };
 
     let (writer, _, reader) =
         serve::Tracks::new(TrackNamespace::from_utf8_path(&cli.name)).produce();

@@ -249,6 +249,7 @@ impl Media {
             let track = self.broadcast.create(&name).context("broadcast closed")?;
             let track = Track::new(track, handler, timescale);
             self.tracks.insert(id, track);
+            moq_metrics::increment_publisher_active_tracks();
         }
 
         let catalog = moq_catalog::Root {
@@ -368,6 +369,8 @@ impl Track {
         );
 
         // Write the fragment in it's own object.
+        moq_metrics::add_publisher_objects_sent(1);
+        moq_metrics::add_publisher_bytes_sent(raw.len() as u64);
         segment.write(raw)?;
 
         // Save for the next iteration
@@ -378,6 +381,8 @@ impl Track {
 
     pub fn data(&mut self, raw: Bytes) -> anyhow::Result<()> {
         let segment = self.current.as_mut().context("missing current fragment")?;
+        moq_metrics::add_publisher_objects_sent(1);
+        moq_metrics::add_publisher_bytes_sent(raw.len() as u64);
         segment.write(raw)?;
 
         Ok(())
@@ -385,6 +390,12 @@ impl Track {
 
     pub fn end_group(&mut self) {
         self.current = None;
+    }
+}
+
+impl Drop for Track {
+    fn drop(&mut self) {
+        moq_metrics::decrement_publisher_active_tracks();
     }
 }
 

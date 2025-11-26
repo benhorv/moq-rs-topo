@@ -9,10 +9,7 @@ use anyhow::Context;
 use axum::{Router, response::IntoResponse, routing::get};
 use prometheus_client::encoding::text::encode;
 use std::time::Duration;
-use std::{
-    net::SocketAddr,
-    sync::Mutex,
-};
+use std::{net::SocketAddr, sync::Mutex};
 use sysinfo::{ProcessesToUpdate, System};
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
@@ -90,7 +87,19 @@ define_metrics! {
 
     subscriber_objects_received: Counter<u64>, "subscriber_objects_received", "Objects received by subscriber",
     subscriber_bytes_received: Counter<u64>, "subscriber_bytes_received", "Bytes received by subscriber",
-    subscriber_active_tracks: Gauge<i64>, "subscriber_active_tracks", "Active tracks in subscriber"
+    subscriber_active_tracks: Gauge<i64>, "subscriber_active_tracks", "Active tracks in subscriber",
+
+    publisher_objects_sent: Counter<u64>, "publisher_objects_sent", "Objects sent by publisher",
+    publisher_bytes_sent: Counter<u64>, "publisher_bytes_sent", "Bytes sent by publisher",
+    publisher_active_tracks: Gauge<i64>, "publisher_active_tracks", "Active tracks in publisher"
+}
+
+pub fn increment_publisher_active_tracks() {
+    GLOBAL_METRICS.metrics.publisher_active_tracks.inc();
+}
+
+pub fn decrement_publisher_active_tracks() {
+    GLOBAL_METRICS.metrics.publisher_active_tracks.dec();
 }
 
 pub fn increment_announced_tracks() {
@@ -130,7 +139,10 @@ pub fn add_bytes_received(count: u64) {
 }
 
 pub fn add_bytes_sent(count: u64) {
-    GLOBAL_METRICS.metrics.bytes_sent_to_subscriber.inc_by(count);
+    GLOBAL_METRICS
+        .metrics
+        .bytes_sent_to_subscriber
+        .inc_by(count);
 }
 
 pub fn increment_active_publishers() {
@@ -157,19 +169,26 @@ pub fn remove_quic_rtt(addr: String) {
 }
 
 pub fn update_lost_packets(addr: String, count: u64) {
-    GLOBAL_METRICS.metrics.quic_lost_packets
+    GLOBAL_METRICS
+        .metrics
+        .quic_lost_packets
         .get_or_create(&ConnectionLabels { addr })
         .set(count as i64);
 }
 
 pub fn update_sent_packets(addr: String, count: u64) {
-    GLOBAL_METRICS.metrics.quic_sent_packets
+    GLOBAL_METRICS
+        .metrics
+        .quic_sent_packets
         .get_or_create(&ConnectionLabels { addr })
         .set(count as i64);
 }
 
 pub fn update_process_cpu(percent: i64) {
-    GLOBAL_METRICS.metrics.process_cpu_usage_percent.set(percent);
+    GLOBAL_METRICS
+        .metrics
+        .process_cpu_usage_percent
+        .set(percent);
 }
 
 pub fn update_process_memory(bytes: i64) {
@@ -181,16 +200,25 @@ pub fn update_system_cpu(percent: i64) {
 }
 
 pub fn update_system_memory(available: i64, total: i64) {
-    GLOBAL_METRICS.metrics.system_memory_available_bytes.set(available);
+    GLOBAL_METRICS
+        .metrics
+        .system_memory_available_bytes
+        .set(available);
     GLOBAL_METRICS.metrics.system_memory_bytes.set(total);
 }
 
 pub fn add_subscriber_objects_received(count: u64) {
-    GLOBAL_METRICS.metrics.subscriber_objects_received.inc_by(count);
+    GLOBAL_METRICS
+        .metrics
+        .subscriber_objects_received
+        .inc_by(count);
 }
 
 pub fn add_subscriber_bytes_received(count: u64) {
-    GLOBAL_METRICS.metrics.subscriber_bytes_received.inc_by(count);
+    GLOBAL_METRICS
+        .metrics
+        .subscriber_bytes_received
+        .inc_by(count);
 }
 
 pub fn increment_subscriber_active_tracks() {
@@ -199,6 +227,18 @@ pub fn increment_subscriber_active_tracks() {
 
 pub fn decrement_subscriber_active_tracks() {
     GLOBAL_METRICS.metrics.subscriber_active_tracks.dec();
+}
+
+pub fn add_publisher_objects_sent(count: u64) {
+    GLOBAL_METRICS.metrics.publisher_objects_sent.inc_by(count);
+}
+
+pub fn add_publisher_bytes_sent(count: u64) {
+    GLOBAL_METRICS.metrics.publisher_bytes_sent.inc_by(count);
+}
+
+pub fn get_publisher_bytes_sent() -> u64 {
+    GLOBAL_METRICS.metrics.publisher_bytes_sent.get()
 }
 
 pub fn increment_active_connections() {
@@ -213,15 +253,17 @@ pub fn add_scrape_callback<F>(callback: F)
 where
     F: Fn() -> bool + Send + Sync + 'static,
 {
-    GLOBAL_METRICS.callbacks.lock().unwrap().push(Box::new(callback));
+    GLOBAL_METRICS
+        .callbacks
+        .lock()
+        .unwrap()
+        .push(Box::new(callback));
 }
 
 async fn metrics_handler() -> impl IntoResponse {
     {
         let mut callbacks = GLOBAL_METRICS.callbacks.lock().unwrap();
-        callbacks.retain(|callback| {
-            callback()
-        });
+        callbacks.retain(|callback| callback());
     }
 
     let mut buffer = String::new();
@@ -269,7 +311,8 @@ pub fn poll_system() -> anyhow::Result<tokio::task::JoinHandle<anyhow::Result<()
             sys.refresh_memory();
             sys.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
 
-            let cpu_usage_manual: f32 = sys.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32;
+            let cpu_usage_manual: f32 =
+                sys.cpus().iter().map(|cpu| cpu.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32;
 
             let available_mem = sys.available_memory();
             let total_mem = sys.total_memory();

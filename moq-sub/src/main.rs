@@ -22,13 +22,16 @@ async fn main() -> anyhow::Result<()> {
 
     let config = Config::parse();
 
-    if let Some(metrics_bind) = config.metrics_bind {
+    let _system_poller = if let Some(metrics_bind) = config.metrics_bind {
         tokio::spawn(async move {
             if let Err(e) = moq_metrics::run_server(metrics_bind) {
                 log::error!("Metrics server failed: {}", e);
             }
         });
-    }
+        Some(moq_metrics::poll_system()?)
+    } else {
+        None
+    };
 
     let tls = config.tls.load()?;
     let quic = quic::Endpoint::new(quic::Config {
