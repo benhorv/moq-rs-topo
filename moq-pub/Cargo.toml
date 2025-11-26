@@ -17,12 +17,14 @@ categories = ["multimedia", "network-programming", "web-programming"]
 moq-native-ietf = { path = "../moq-native-ietf", version = "0.5" }
 moq-transport = { path = "../moq-transport", version = "0.11" }
 moq-catalog = { path = "../moq-catalog", version = "0.2" }
+moq-metrics = { path = "../moq-metrics", version = "0.1" }
 
 url = "2"
 bytes = "1"
 
 # Async stuff
 tokio = { version = "1", features = ["full"] }
+futures = "0.3"
 
 # CLI, logging, error handling
 clap = { version = "4", features = ["derive"] }
