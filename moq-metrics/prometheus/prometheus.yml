@@ -43,7 +43,11 @@ scrape_configs:
       #     relay_id: 'relay3'
       #     app_port: '4453'
 
-  - job_name: 'moq-subscriber'
+  # This job reads targets from a file, allowing you to add/remove instances
+  # without restarting Prometheus.
+  # See targets.json for the list of subscribers and publishers.
+  - job_name: 'moq-clients'
     scrape_interval: 5s
-    static_configs:
-      - targets: ['localhost:9094']
+    file_sd_configs:
+      - files:
+        - 'targets.json'

@@ -1,0 +1,56 @@
+[
+    {
+        "targets": [
+            "localhost:9094"
+        ],
+        "labels": {
+            "stream": "bbb",
+            "role": "subscriber"
+        }
+    },
+    {
+        "targets": [
+            "localhost:9095"
+        ],
+        "labels": {
+            "stream": "ccc",
+            "role": "subscriber"
+        }
+    },
+    {
+        "targets": [
+            "localhost:9098"
+        ],
+        "labels": {
+            "stream": "bbb",
+            "role": "subscriber"
+        }
+    },
+    {
+        "targets": [
+            "localhost:9099"
+        ],
+        "labels": {
+            "stream": "ccc",
+            "role": "subscriber"
+        }
+    },
+    {
+        "targets": [
+            "localhost:9096"
+        ],
+        "labels": {
+            "stream": "bbb",
+            "role": "publisher"
+        }
+    },
+    {
+        "targets": [
+            "localhost:9097"
+        ],
+        "labels": {
+            "stream": "ccc",
+            "role": "publisher"
+        }
+    }
+]
