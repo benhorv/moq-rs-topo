@@ -1,5 +1,5 @@
 #set text(
-  font: "New Computer Modern",
+  font: "Liberation Serif",
   size: 12pt,
   lang: "hu",
 )
@@ -7,12 +7,10 @@
 #set page(
   paper: "a4",
   margin: (x: 2.5cm, y: 2.5cm),
-  numbering: "1",
 )
 
 #set heading(numbering: "1.")
 
-// cover page
 // cover page
 #align(center)[
   #image("bme_logo.svg", width: 60%)
@@ -68,8 +66,8 @@
 #pagebreak()
 
 #set page(
-  header: align(right)[
-    Horváth Benedek \ `D86EP7`
+  header: align(left)[
+    #text(style: "italic")[Horváth Benedek (D86EP7)]
   ],
 )
 
@@ -77,6 +75,9 @@
 #outline(title: "Tartalomjegyzék", indent: auto)
 
 #pagebreak()
+
+#set page(numbering: "1")
+#counter(page).update(1)
 
 = Bevezetés
 
