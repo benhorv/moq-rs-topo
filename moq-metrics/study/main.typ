@@ -109,7 +109,7 @@
 A modern videóstreaming felhasználói egyre magasabb elvárásokat támasztanak a tartalom minőségével és valós idejű elérhetőségével szemben. Az olyan interaktív alkalmazásoknál, mint az élő közvetítések, a hagyományos protokollok késleltetése már zavaró lehet – például amikor a szomszéd előbb ünnepli a gólt, mint ahogy mi látjuk. Erre kínál megoldást a Media over QUIC (MoQ) @moq, amely a QUIC protokoll @quic gyorsaságát és rugalmasságát használja ki a médiaátvitelre, felváltva az elavult TCP-alapú megoldásokat.
 
 == MoQ-hálózatok
-A Media over QUIC nem csupán egy új szállítási protokoll, hanem egy teljesen új hálózati architektúrát is feltételez. A hagyományos, hierarchikus CDN (Content Delivery Network) struktúrák mellett megjelennek a dinamikusabb, relay-alapú topológiák. Ezekben a hálózatokban a csomópontok (relay-ek) nem csak egyszerűen gyorsítótáraznak, hanem aktívan részt vesznek az útvonalválasztásban és a tartalom elosztásában.
+A Media over QUIC nem csupán egy új szállítási protokoll, hanem egy teljesen új hálózati architektúrát is feltételez. A hagyományos, hierarchikus CDN (Content Delivery Network) struktúrák mellett megjelennek a dinamikusabb, relay-alapú topológiák. Ezekben a hálózatokban a csomópontok (relayek) nem csak egyszerűen gyorsítótáraznak, hanem aktívan részt vesznek az útvonalválasztásban és a tartalom elosztásában.
 Egy ilyen elosztott rendszerben a tartalom útja a hálózat állapota, a torlódások és a kliensek igényei alapján folyamatosan változhat. Ez a dinamikus útvonalválasztás azonban új kihívásokat is szül: hogyan biztosítható a QoS (Quality of Service), ha az útvonalak folyamatosan változnak?
 
 == Célkitűzés
@@ -143,10 +143,43 @@ A Media over QUIC (MoQ) architektúra alapvetően három szereplőt különbözt
 3. *Subscriber:* A fogyasztó (pl. videólejátszó).
 
 #figure(
-  rect(width: 100%, height: 6cm, fill: luma(240))[
-    #align(center + horizon)[*1. ábra:* A MoQ architektúra felépítése (Publisher -> Relay -> Subscriber)]
-  ],
-  caption: [A Media over QUIC (MoQ) architektúra logikai felépítése.],
+  raw-render(
+    ```dot
+    digraph {
+      rankdir=LR;
+      node [shape=rect, style="filled", fillcolor="#f0f0f0", fontname="Liberation Sans"];
+      edge [fontname="Liberation Sans", fontsize=10];
+
+      subgraph cluster_publishers {
+        label = "Publishers";
+        style = dashed;
+        color = gray;
+        Pub1 [label="Publisher 1\n(stream: bbb)"];
+        Pub2 [label="Publisher 2\n(stream: ccc)"];
+      }
+
+      Relay [label="MoQ Relay", fillcolor="#e0e0ff", style="filled,bold"];
+
+      subgraph cluster_subscribers {
+        label = "Subscribers";
+        style = dashed;
+        color = gray;
+        Sub1 [label="Subscriber 1\n(watch: bbb)"];
+        Sub2 [label="Subscriber 2\n(watch: bbb)"];
+        Sub3 [label="Subscriber 3\n(watch: ccc)"];
+      }
+
+      Pub1 -> Relay [label="bbb", color="blue", fontcolor="blue", penwidth=2];
+      Pub2 -> Relay [label="ccc", color="green", fontcolor="green", penwidth=2];
+
+      Relay -> Sub1 [label="bbb", color="blue", fontcolor="blue", penwidth=2];
+      Relay -> Sub2 [label="bbb", color="blue", fontcolor="blue", penwidth=2];
+      Relay -> Sub3 [label="ccc", color="green", fontcolor="green", penwidth=2];
+    }
+    ```,
+    labels: (:),
+  ),
+  caption: [A Media over QUIC (MoQ) architektúra logikai felépítése több stream esetén.],
 ) <fig:moq_arch>
 
 == Használt technológiák
@@ -154,7 +187,7 @@ A Media over QUIC (MoQ) architektúra alapvetően három szereplőt különbözt
 === Prometheus vs. OpenTelemetry
 A *Prometheus* jelenleg az ipari standard a metrikák tárolására és lekérdezésére. Nagyon elterjedt, nagy ökoszisztémával rendelkezik, amit egy erős lekérdezési nyelv, a PromQL támogat.
 
-Az *OpenTelemetry (OTel)* egy újabb szabvány, amely egyesíti a trace-ek, logok és metrikák gyűjtését, azonban használata bonyolult és körülményes. Előnye, hogy a backend (ami akár Prometheus is lehet) könnyen cserélhető.
+Az *OpenTelemetry (OTel)* egy újabb szabvány, amely egyesíti a traceek, logok és metrikák gyűjtését, azonban használata bonyolult és körülményes. Előnye, hogy a backend (ami akár Prometheus is lehet) könnyen cserélhető.
 
 Ezek miatt a Prometheus lett használva közvetlenül, mert egyrészt egyszerűbb a használata, másrészt kevesebb erőforrást is igényel, valamint most kifejezetten a metrikákon van a hangsúly.
 
@@ -206,18 +239,34 @@ Főbb feladatai:
 - rendszermetrikák (CPU, memória) periodikus gyűjtése.
 
 #figure(
-  rect(width: 100%, height: 5cm, fill: luma(240))[
-    #align(
-      center + horizon,
-    )[*2. ábra:* A mérési rendszer architektúrája (moq-rs -> prometheus-client -> Prometheus Exporter -> Prometheus -> Grafana)]
-  ],
+  raw-render(
+    ```dot
+    digraph {
+      rankdir=TB;
+      node [shape=rect, style="filled", fillcolor="#f0f0f0", fontname="Liberation Sans"];
+      edge [fontname="Liberation Sans"];
+
+      // Level 1
+      { rank=same; "moq-rs"; "prometheus-client" }
+
+      // Level 3
+      { rank=same; Prometheus; Grafana }
+
+      "moq-rs" -> "prometheus-client" [label="calls"];
+      "prometheus-client" -> "Prometheus Exporter" [label="registers"];
+      "Prometheus Exporter" -> Prometheus [label="scrapes", dir=back];
+      Prometheus -> Grafana [label="queries", dir=back];
+    }
+    ```,
+    labels: (:),
+  ),
   caption: [A tervezett observer pipeline.],
 ) <fig:obs_pipeline>
 
 == Adatgyűjtési stratégiák
 A projektben a *pull modell* került kiválasztásra a Prometheus széleskörű támogatottsága miatt. Minden `moq-rs` komponens (relay, publisher, subscriber) elindít egy HTTP szervert, ahonnan a Prometheus szerver "scrapelheti" az aktuális metrikákat.
 
-=== A "QUIC Loop" és a "Sysinfo Loop" dilemma
+=== A "QUIC-loop dilemma"
 A fejlesztés egyik központi kérdése az volt, hogy mikor és hogyan frissüljenek a metrikák értékei. Két eltérő megközelítést is alkalmazásra került a metrikák természetétől függően:
 
 1. *QUIC metrikák:*
@@ -354,21 +403,17 @@ A dashboard úgy lett kialakítva, hogy a legfontosabb vagy legértelmesebb muta
 - *Track Sync:* A közzé tett és a feliratkozott sávok (tracks) számának szinkronja, ami segít a "szivárgó" feliratkozások felfedezésében.
 
 #figure(
-  rect(width: 100%, height: 8cm, fill: luma(240))[
-    #align(center + horizon)[*3. ábra:* A megvalósított Grafana dashboard (Throughput, Stream Breakdown, CPU, Memory)]
-  ],
-  caption: [A megvalósított Grafana dashboard, kiemelve a streamszintű forgalmi adatokat.],
+  image("grafana_dash.png", width: 100%),
+  caption: [A megvalósított Grafana dashboard egy részlete.],
 ) <fig:grafana_dashboard>
 
 == Eredmények értelmezése
-A mérések során a rendszer erőforrás-igényét és a hálózati stabilitást vizsgáltuk. Látszódik, ha változik a feliratkozók vagy a publisherek száma, új stream jön be a képbe, és az is látszódik, hogy hogyan változik a terhelés ezek függvényében. Jól látszódik az is, ha valamelyik stream a szokásosnál több erőforrást használ, megnő a sávszélesség, hirtelen változás esetén a késleltetés is növekedik.
+A mérések során a rendszer erőforrásigényét és a hálózati stabilitást vizsgáltuk. Látszódik, ha változik a feliratkozók vagy a publisherek száma, új stream jön be a képbe, és az is látszódik, hogy hogyan változik a terhelés ezek függvényében. Jól látszódik az is, ha valamelyik stream a szokásosnál több erőforrást használ, megnő a sávszélesség, hirtelen változás esetén a késleltetés is növekedik.
 
 #figure(
-  rect(width: 100%, height: 6cm, fill: luma(240))[
-    #align(center + horizon)[*4. ábra:* Sávszélesség-eloszlás stream-típusonként]
-  ],
-  caption: [A különböző streamek sávszélesség-használatának megoszlása.],
-) <fig:bandwidth_dist>
+  image("namespace_pop.png", width: 80%),
+  caption: [A különböző streamek használatának megoszlása.],
+) <fig:namespace_pop>
 
 #pagebreak()
 

@@ -1207,6 +1207,7 @@
       },
       "fieldConfig": {
         "defaults": {
+          "decimals": 0,
           "color": {
             "mode": "palette-classic"
           },
@@ -1286,11 +1287,11 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "moq_relay_active_subscribed_tracks",
+          "expr": "count(subscriber_active_tracks{role=\"subscriber\"}) by (stream)",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "{{namespace}}",
+          "legendFormat": "{{stream}}",
           "range": true,
           "refId": "A",
           "useBackend": false
