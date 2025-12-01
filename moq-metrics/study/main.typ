@@ -130,7 +130,7 @@ A megfigyelhetőség (observability) a modern elosztott rendszerek üzemeltetés
 == Adatgyűjtési módszerek
 A metrikák gyűjtésének két alapvető modellje létezik: a *pull* és a *push*.
 
-A *pull modell* (pl. Prometheus @prometheus) esetében a monitorozó szerver periodikusan lekérdezi ("scrape") az alkalmazás végpontját. Előnye, hogy központi backend gyűjti az adatokat, viszont nehézkes lehet a hálózat belüli - vagy különösen az azon kívüli - kommunikáció.
+A *pull modell* (pl. Prometheus @prometheus) esetében a monitorozó szerver periodikusan lekérdezi ("scrape") az alkalmazás végpontját. Előnye, hogy központi backend gyűjti az adatokat, viszont nehézkes lehet a hálózat belüli – vagy különösen az azon kívüli – kommunikáció.
 
 A *push modell* (pl. Graphite, OpenTelemetry OTLP @opentelemetry) esetében az alkalmazás küldi el az adatokat egy központi gyűjtőnek. Ez egyszerűbb hálózati kommunikációt jelent, mert nem kell tudnia a backendnek a külön megfigyelendő végpontokról, de emiatt nehezebben is kiszámítható a terhelés, könnyen alakulhat ki túlterhelés.
 
@@ -284,7 +284,7 @@ Komoly fejtörést okozott a megfelelő metrikák kiválasztása. Nem az volt a 
 
 1. *Forgalmi adatok:* Az átvitt adatmennyiség (bájtok) és objektumok száma, mind a publikálók, mind a feliratkozók irányába. Ez ad képet a rendszer tényleges terheléséről.
 2. *Kapcsolatok állapota:* Az aktív QUIC kapcsolatok, publikálók és feliratkozók száma, valamint a hálózati minőség mutatói (pl. RTT, csomagvesztés).
-3. *MoQ specifikus metrikák:* A protokoll szintű entitások, mint a meghirdetett (announced) és feliratkozott (subscribed) sávok (tracks) követése.
+3. *MoQ specifikus metrikák:* A protokoll szintű entitások, mint a meghirdetett és feliratkozott sávok követése.
 4. *Rendszererőforrások:* A CPU és memória felhasználása mind folyamat, mind rendszerszinten, ami kritikus a skálázódás és a hardveres korlátok felismerése szempontjából.
 
 #pagebreak()
@@ -360,22 +360,22 @@ moq_metrics::add_bytes_received(data.len() as u64);
 ```
 
 == Címkézés
-A metrikák nem csupán egyszerű számlálók, hanem *címkékkel (labels)* vannak ellátva. Például a sávszélesség mérésekor a `namespace` címke jelöli, hogy melyik streamhez tartozik az adat. Ez teszi lehetővé a Grafanában a későbbi szűrést és a részletes bontást (pl. melyik stream "eszi" a legtöbb sávszélességet, vagy melyik relay van földrajzilag leterhelve), ami sokat segít a mutatók összeállításában. Persze a jelenleg implementált címkéken kívül igény szerint lehetne még implementálni, pl. track ID, IP, port stb., ami hasznos lehet.
+A metrikák nem csupán egyszerű számlálók, címkékkel is el lehet őket látni. Például a sávszélesség mérésekor a `namespace` címke jelöli, hogy melyik streamhez tartozik az adat. Ez teszi lehetővé a Grafanában a későbbi szűrést és a részletes bontást (pl. melyik stream "eszi" a legtöbb sávszélességet, vagy melyik relay van földrajzilag leterhelve), ami sokat segít a mutatók összeállításában. Persze a jelenleg implementált címkéken kívül igény szerint lehetne még implementálni, pl. track ID, IP, port stb., ami hasznos lehet.
 
 == Tervezési minták
 A fejlesztés során két fontos tervezési minta került alkalmazásra a kód egyszerűsítése és a biztonság növelése érdekében:
 
-1. *Singleton:* Bár a globális változók használata általában kerülendő, ebben az esetben a `GLOBAL_METRICS` singleton (a `once_cell::sync::Lazy` @once_cell_crate segítségével) jelentősen egyszerűsítette a hívásokat. Így nem kellett minden függvénynek paraméterként átadni a metrikaregisztert, hanem bárhonnan elérhetővé váltak a számlálók (pl. `moq_metrics::increment_active_connections()`).
+1. *Singleton:* Bár a globális változók használata általában kerülendő, ebben az esetben a `GLOBAL_METRICS` singleton (a `once_cell::sync::Lazy` @once_cell_crate segítségével) jelentősen egyszerűsítette a hívásokat. Így nem kellett minden függvénynek paraméterként átadni a metrika registryt, hanem bárhonnan elérhetővé váltak a számlálók (pl. `moq_metrics::increment_active_connections()`).
 
 2. *RAII:* A kapcsolatok és trackek számának mérésekor fontos, hogy a számlálók értéke csökkenjen, amikor az erőforrás felszabadul. A manuális `dec()` hívások helyett RAII (Resource Acquisition Is Initialization) guardokat lettek implementálva. Ezek olyan structok, amelyek `Drop` implementációja automatikusan csökkenti a metrikát, amikor a változó kikerül a scopeból.
 
-3. *Mutex optimalizáció:* Kezdetben minden metrika `Mutex` mögé került a szálbiztonság érdekében. A profilozás és a dokumentáció átnézése során azonban kiderült, hogy a `prometheus-client` primitívjei (Counter, Gauge) belső atomi műveleteket (`std::sync::atomic`) használnak, így önmagukban is szálbiztosak. A felesleges lockok eltávolítása egyszerűsítette a kódot és javította a teljesítményt.
+3. *Mutex optimalizáció:* Kezdetben minden metrika `Mutex` mögé került a szálbiztonság érdekében. A munka közben azonban kiderült, hogy a `prometheus-client` primitívjei (Counter, Gauge) belső atomi műveleteket (`std::sync::atomic`) használnak, így önmagukban is szálbiztosak. A felesleges lockok eltávolítása egyszerűsítette a kódot és javította a teljesítményt.
 
 == Használat
 A kód olvashatóságának megőrzése érdekében a mérések a logikától elválasztva kerültek elhelyezésre. A `lib.rs`-ben definiált globálisan elérhető publikus függvényekkel egyszerűen növelhető egy-egy számláló a megfelelő helyen.
 
 === Relay
-A relayekben mérhető a legtöbb dolog, ugyanis a MoQ-hálózat gerincét ezek teszik ki. Itt történik a bejövő és kimenő forgalom mérése munkamenetenként (session). Itt számos metrika lett implementálva, mint a feliratkozott trackek száma, küldött objektumok, bájtok száma, aktív QUIC kapcsolatok száma, valamint persze a CPU és memóriával kapcsolatos metrikák.
+A relayekben mérhető a legtöbb dolog, ugyanis a MoQ-hálózat gerincét ezek teszik ki. Itt történik a bejövő és kimenő forgalom mérése sessionönként. Itt számos metrika lett implementálva, mint a feliratkozott trackek száma, küldött objektumok, bájtok száma, aktív QUIC kapcsolatok száma, valamint persze a CPU és memóriával kapcsolatos metrikák.
 
 === Publisher és Subscriber
 A végpontokon is a relayhez hasonló metrikák lettek implementálva, de inkább a hálózat minőségére koncentrálva, hogy lehessen E2E metrikákat mérni.
@@ -383,10 +383,10 @@ A végpontokon is a relayhez hasonló metrikák lettek implementálva, de inkáb
 == Fejlesztési nehézségek és tapasztalatok
 A fejlesztés során több kihívás is felmerült:
 
-1. *Mérési pontok helyes kiválasztása:* A leggyakoribb hiba a "dupla számolás" volt. Mivel bizonyos függvények a kód több pontjáról vagy többször is meghívódhatnak egy esemény kapcsán, nehéz volt megtalálni azt az egyetlen pontot, ahol a metrikát biztonságosan lehet növelni. Emiatt például az aktív feliratkozott trackekre vonatkozó metrika eleve a feliratkozókra vonatkozott, de kiderült, hogy mindig trackenként lehet csak növelni, és egy streamhez alapértelmezetten nem is egy, hanem több is tartozik, mert mindig van egy "init" track a rendes médiafolyam mellett.
+1. *Mérési pontok helyes kiválasztása:* A leggyakoribb hiba a "dupla számolás" volt. Mivel bizonyos függvények a kód több pontjáról vagy többször is meghívódhatnak egy esemény bekövetkezetekor, nehéz volt megtalálni azt az egyetlen pontot, ahol a metrikát biztonságosan lehet növelni. Emiatt például az aktív feliratkozott trackekre vonatkozó metrika eleve a feliratkozókra vonatkozott, de kiderült, hogy mindig trackenként lehet csak növelni, és egy streamhez alapértelmezetten nem is egy, hanem több is tartozik, mert mindig van egy "init" track a rendes médiafolyam mellett.
 2. *A QUIC-loop dilemma:* A korábban említett "on-demand" mérésnek van egy hátránya. A `quinn` könyvtárban @quinn_crate a kapcsolatok statisztikáinak lekérdezése (`conn.stats()`) belső zárolással (lock) jár. Ha hirtelen megnő a QUIC kapcsolatok száma (pl. több ezer kliens), a Prometheus lekérdezés (scrape) pillanatában a rendszernek egyszerre kell iterálnia az összes kapcsolaton. Ez rövid ideig tartó, de intenzív blokkolást okozhat, ami extrém esetben akadályozhatja a folyamatban lévő QUIC kommunikációt (pl. új kapcsolatok fogadását). Ez a projekt esetében ez természetesen nem okoz problémát, de a jövőben figyelmet igényel.
 
-3. *Rejtett hibák:* A metrikák bevezetése segített beazonosítani egy vélt implementációs hibát. A `moq_relay_bytes_received_from_publisher` számláló növekedéséből látszott, hogy a relay akkor is fogadott adatot a publishertől, amikor már nem volt aktív feliratkozó (subscriber). Ez egy olyan hibát jelzett, ami valószínűleg olyan helyzetben történik, ahol a `DROP` esemény nem került megfelelően átadásra a publisher felé. Ez az eset is mutatja, hogy a metrikagyűjtés valóban hasznosnak bizonyul.
+3. *Rejtett hibák:* A metrikák bevezetése segített beazonosítani egy vélt implementációs hibát. A `moq_relay_bytes_received_from_publisher` számláló növekedéséből látszott, hogy a relay akkor is fogadott adatot a publishertől, amikor már nem volt aktív feliratkozó. Ez egy olyan hibát jelzett, ami valószínűleg olyan helyzetben történik, ahol a `DROP` esemény nem került megfelelően átadásra a publisher felé. Ez az eset is mutatja, hogy a metrikagyűjtés valóban hasznosnak bizonyul.
 
 #pagebreak()
 
@@ -395,7 +395,7 @@ A fejlesztés során több kihívás is felmerült:
 A begyűjtött metrikák megjelenítésére a Grafana @grafana került kiválasztásra, mivel natívan támogatja a Prometheust és rugalmasan testreszabható.
 
 == Grafana dashboard tervezése
-A dashboard úgy lett kialakítva, hogy a legfontosabb vagy legértelmesebb mutatókat lehessen demózni. A `grafana/moq-rs-*.json` fájl alapján a következő panelek kerültek megvalósításra:
+A dashboard úgy lett kialakítva, hogy a legfontosabb vagy legértelmesebb mutatókat lehessen demózni. A `grafana/moq-rs-*.json` fájl alapján a tömmek között a következő panelek kerültek megvalósításra:
 
 - *Throughput & Network Usage:* A publikálók által küldött és a feliratkozók által fogadott adatmennyiség valós idejű grafikonja. Itt látható a rendszer teljes sávszélességigénye.
 - *Streamszintű sávszélességbontás:* A forgalmat streamekre lebontva is nyomon lehet követni egy grafikonon.
@@ -428,7 +428,7 @@ A korábban már említett QUIC-metrikák mérését meg kell vizsgálni, és al
 A jelenlegi metrikapalettát még lehet bővíteni igény szerint, például a puffer és cache megfigyelésével, egyéb, lokáció alapú metrikákkal, stb.
 
 == Dockeresítés
-A tesztelés és a reprodukálhatóság érdekében hasznos lenne a teljes környezetet (relay, publisher, subscriber, Prometheus, Grafana) egy `docker-compose` stackbe szervezni. Ez nagyban megkönnyítené a rendszer kipróbálását és a fejlesztést.
+A tesztelés és a reprodukálhatóság érdekében hasznos lenne a teljes környezetet (relay, publisher, subscriber, Prometheus, Grafana) "dockeresíteni". Ez nagyban megkönnyítené a rendszer kipróbálását és a fejlesztést.
 
 == Upstreaming
 A fejlesztett `moq-metrics` könyvtár jelenleg a saját forkban él. A hosszú távú cél, hogy a tapasztalatok alapján egy letisztult, egyszerűsített demó változat készüljön, amely Pull Request formájában visszakerülhet az eredeti `moq-rs` projektbe. Ezáltal a közösség számára is elérhetővé válna egy alapvető, de bővíthető megfigyelhetőségi réteg.
