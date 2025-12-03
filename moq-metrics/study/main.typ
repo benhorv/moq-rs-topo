@@ -124,7 +124,7 @@ A feladat célja a `moq-rs` @moq_rs_repo implementáció mérési lehetőségein
 == A MoQ-ökoszisztéma
 A Media over QUIC (MoQ) architektúra (@fig:moq_arch) alapvetően három szereplőt különböztet meg: a *publisher*-t, aki a tartalom előállítója (stream forrása, kamera stb.), a *relay*-t, ami a közvetítő szerver, amely gyorsítótárazza és továbbítja az adatokat, alkotva a CDN (Content Delivery Network) gerincét, valamint a *subscriber*-t, ami a fogyasztó (pl. videólejátszó).
 
-A szereplőkön kívül fontos megemlíteni a MoQ adatmodelljének elemeit is. A *namespace* (névtér) a streamek logikai csoportosítását szolgálja, segítve a tartalmak rendszerezésében (pl. `bbb` vagy `ccc`). A *stream* egy önálló tartalomfolyam (pl. egy videóadás), amelyet mindig egy névtér azonosít. A streamen belüli logikai egység a *track*, amely lehet például külön kép- és hangsáv, vagy különböző felbontás. A legkisebb átviteli egységek a *group* és az *object*. A trackek csoportokra (group), azok pedig objektumokra (object) vannak bontva. Egy objektum lehet például egy részlete a képnek (pár képkocka) vagy a hangsávnak, és a hálózati átvitel ezen a szinten történik.
+A szereplőkön kívül fontos megemlíteni a MoQ adatmodelljének elemeit is. A *namespace* (névtér) a streamek logikai csoportosítását szolgálja, segítve a tartalmak rendszerezésében (pl. `bbb` vagy `ccc`). A *stream* egy önálló tartalomfolyam (pl. egy videóadás), amelyet mindig egy névtér azonosít. A streamen belüli logikai egység a *track* (sáv), amely lehet például külön kép- és hangsáv, vagy különböző felbontás. A legkisebb átviteli egységek a *group* és az *object*. A sávok csoportokra (group), azok pedig objektumokra (object) vannak bontva. Egy objektum lehet például egy részlete a képnek (pár képkocka) vagy a hangsávnak, és a hálózati átvitel ezen a szinten történik.
 
 A feladat alapjául szolgáló `moq-rs` projekt ezt az architektúrát valósítja meg Rust nyelven. A projekt több, egymásra épülő komponensből áll: a rendszer magját a *`moq-transport`* adja, amely a MoQ protokoll alapvető alkotóelemeit valósítja meg QUIC felett. A hálózat gerincét a *`moq-relay`*, a központi médiatovábbító szerver biztosítja, míg a *`moq-pub`* és *`moq-sub`* a referencia kliensimplementációk (publisher és subscriber).
 
@@ -179,7 +179,7 @@ Bár a hálózat dinamikus felépítése indokolhatná a push modellt, a Prometh
 
 == Használt technológiák
 
-Mivel a `moq-rs` teljes egészében Rust nyelven íródott, a választott technológiának rendelkeznie kell megfelelőRust támogatással.
+Mivel a `moq-rs` teljes egészében Rust nyelven íródott, a választott technológiának rendelkeznie kell megfelelő Rust támogatással.
 
 A *Prometheus* jelenleg az ipari standard a metrikák tárolására és lekérdezésére. Nagyon elterjedt, nagy ökoszisztémával rendelkezik, amit egy erős lekérdezési nyelv, a PromQL támogat.
 
@@ -208,9 +208,9 @@ A fejlesztéshez kellett választani egy Prometheus könyvtárat. A Rust ökoszi
 - *`metrics`:* Egy népszerű, generikus könyvtár @metrics_crate. Bár rugalmas, a `prometheus-client` közvetlenebb kontrollt biztosít a metrikák felett.
 - *`opentelemetry`:* Az OTel teljes implementációja @opentelemetry. Bár nagy tudású, nehézkesebb a használata és nagyobb overheaddel jár.
 
-A `moq-rs` fejlesztése során a `prometheus-client` cratet használtam, mivel ennek használata a leghatékonyabb és legegyszerűbb Prometheus formátumú adatok kezelésére.
+A `moq-rs` fejlesztése során a `prometheus-client` könyvtárat használtam, mivel ennek használata a leghatékonyabb és legegyszerűbb Prometheus formátumú adatok kezelésére.
 
-A vizualizációhoz a Grafanat @grafana választotta, amely egy nyílt forráskódú vizualizációs platform, amely lehetővé teszi a metrikák lekérdezését, megjelenítését és vizualizációját. Képes számos adatforráshoz, köztük a Prometheushoz is kapcsolódni, így ideális választás a gyűjtött adatok megjelenítésére. A segítségével létrehozhatunk dinamikus dashboardokat, amelyek valós időben mutatják a rendszer állapotát, például a sávszélesség-használatot vagy a kapcsolatok számát.
+A vizualizációhoz a Grafanat @grafana választottam, amely egy nyílt forráskódú vizualizációs platform, ami lehetővé teszi a metrikák lekérdezését, megjelenítését és vizualizációját. Képes számos adatforráshoz, köztük a Prometheushoz is kapcsolódni, így ideális választás a gyűjtött adatok megjelenítésére. A segítségével létrehozhatunk dinamikus dashboardokat, amelyek valós időben mutatják a rendszer állapotát, például a sávszélesség-használatot vagy a kapcsolatok számát.
 
 = Metrikagyűjtés beépítése a `moq-rs`-be
 
@@ -307,7 +307,7 @@ Ez a hibrid megoldás biztosítja az egyensúlyt, a lassabban változó hálóza
 === Tervezési minták
 A fejlesztés során két fontos tervezési minta is alkalmazásra került. Az egyik a *Singleton* minta: bár a globális változók használata általában kerülendő, ebben az esetben a `GLOBAL_METRICS` singleton (a `once_cell::sync::Lazy` @once_cell_crate segítségével) jelentősen egyszerűsítette a hívásokat. Így nem kellett minden függvénynek paraméterként átadni a metrika registryt, hanem bárhonnan elérhetővé váltak a számlálók (pl. `moq_metrics::increment_active_connections()`).
 
-A másik fontos minta a *RAII* (Resource Acquisition Is Initialization). A kapcsolatok és trackek számának mérésekor fontos, hogy a számlálók értéke csökkenjen, amikor az erőforrás felszabadul. A manuális `dec()` hívások helyett RAII guardokat implementáltam. Ezek olyan struktúrák, amelyek `Drop` implementációja automatikusan csökkenti a metrikát, amikor a változó kikerül a scopeból.
+A másik fontos minta a *RAII* (Resource Acquisition Is Initialization). A kapcsolatok és sávok számának mérésekor fontos, hogy a számlálók értéke csökkenjen, amikor az erőforrás felszabadul. A manuális `dec()` hívások helyett RAII guardokat implementáltam. Ezek olyan struktúrák, amelyek `Drop` implementációja automatikusan csökkenti a metrikát, amikor a változó kikerül a scopeból.
 
 === Makrók használata
 
@@ -392,7 +392,7 @@ A metrikák növelése pedig a kód megfelelő pontjain történik (@code:metric
 == Fejlesztési nehézségek és tapasztalatok
 A fejlesztés során több kihívás is felmerült:
 
-A *mérési pontok helyes kiválasztása* során a leggyakoribb hiba a "dupla számolás" volt. Mivel bizonyos függvények a kód több pontjáról vagy többször is meghívódhatnak egy esemény bekövetkezetekor, nehéz volt megtalálni azt az egyetlen pontot, ahol a metrikát biztonságosan lehet növelni. Emiatt például az aktív feliratkozott trackekre vonatkozó metrika eleve a feliratkozókra vonatkozott, de kiderült, hogy mindig trackenként lehet csak növelni, és egy streamhez alapértelmezetten nem is egy, hanem több is tartozik, mert mindig van egy "init" track a rendes médiafolyam mellett.
+A *mérési pontok helyes kiválasztása* során a leggyakoribb hiba a "dupla számolás" volt. Mivel bizonyos függvények a kód több pontjáról vagy többször is meghívódhatnak egy esemény bekövetkezetekor, nehéz volt megtalálni azt az egyetlen pontot, ahol a metrikát biztonságosan lehet növelni. Emiatt például az aktív feliratkozott sávokra vonatkozó metrika eleve a feliratkozókra vonatkozott, de kiderült, hogy mindig sávonként lehet csak növelni, és egy streamhez alapértelmezetten nem is egy, hanem több is tartozik, mert mindig van egy "init" track a rendes médiafolyam mellett.
 
 A korábban említett *"on-demand" QUIC-mérésnek* kezdetben volt egy technikai akadálya. A `quinn` könyvtárban @quinn_crate a kapcsolatok statisztikáinak lekérdezése (`conn.stats()`) belső zárolással (lock) jár. Ez azt jelentené, hogy nagy számú QUIC kapcsolat esetén a Prometheus lekérdezés (scrape) ideje alatt a rendszernek egyszerre kellene iterálnia az összes kapcsolaton, ami blokkolhatta volna az új kapcsolatok fogadását. Ezt végül sikerült kiküszöbölni: a metrikák lekérdezésekor a kapcsolatok listája lemásolásra kerül (`Arc` segítségével) a zárolás alatt, így a QUIC-kapcsolatok lekérése már nem blokkol. Ennek ellenére ez a dilemma figyelmet igényel, ugyanis nem minden esetben egyértelmű, hogy pontosan mit történik több ezer QUIC kapcsolat esetén.
 
