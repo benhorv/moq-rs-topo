@@ -22,7 +22,7 @@ pub struct StreamLabels {
     pub namespace: String,
 }
 
-type ScrapeCallback = Box<dyn Fn() -> bool + Send + Sync>;
+type ScrapeCallback = std::sync::Arc<dyn Fn() -> bool + Send + Sync>;
 
 pub struct MetricsState {
     pub registry: Mutex<Registry>,
@@ -257,13 +257,17 @@ where
         .callbacks
         .lock()
         .unwrap()
-        .push(Box::new(callback));
+        .push(std::sync::Arc::new(callback));
 }
 
 async fn metrics_handler() -> impl IntoResponse {
-    {
-        let mut callbacks = GLOBAL_METRICS.callbacks.lock().unwrap();
-        callbacks.retain(|callback| callback());
+    let callbacks_to_run: Vec<ScrapeCallback> = {
+        let callbacks = GLOBAL_METRICS.callbacks.lock().unwrap();
+        callbacks.clone()
+    };
+
+    for callback in callbacks_to_run {
+        callback();
     }
 
     let mut buffer = String::new();
