@@ -1,6 +1,7 @@
 #import "@preview/diagraph:0.3.0": *
+#import "figures.typ"
 #set text(
-  font: "Liberation Serif",
+  font: "Times New Roman", // use an installed typeface!
   size: 12pt,
   lang: "hu",
 )
@@ -129,42 +130,7 @@ A szereplőkön kívül fontos megemlíteni a MoQ adatmodelljének elemeit is. A
 A feladat alapjául szolgáló `moq-rs` projekt ezt az architektúrát valósítja meg Rust nyelven. A projekt több, egymásra épülő komponensből áll: a rendszer magját a *`moq-transport`* adja, amely a MoQ protokoll alapvető alkotóelemeit valósítja meg QUIC felett. A hálózat gerincét a *`moq-relay`*, a központi médiatovábbító szerver biztosítja, míg a *`moq-pub`* és *`moq-sub`* a referencia kliensimplementációk (publisher és subscriber).
 
 #figure(
-  raw-render(
-    ```dot
-    digraph {
-      rankdir=LR;
-      node [shape=rect, style="filled", fillcolor="#f0f0f0", fontname="Liberation Sans"];
-      edge [fontname="Liberation Sans", fontsize=10];
-
-      subgraph cluster_publishers {
-        label = "Publishers";
-        style = dashed;
-        color = gray;
-        Pub1 [label="Publisher 1\n(stream: bbb)"];
-        Pub2 [label="Publisher 2\n(stream: ccc)"];
-      }
-
-      Relay [label="MoQ Relay", fillcolor="#e0e0ff", style="filled,bold"];
-
-      subgraph cluster_subscribers {
-        label = "Subscribers";
-        style = dashed;
-        color = gray;
-        Sub1 [label="Subscriber 1\n(watch: bbb)"];
-        Sub2 [label="Subscriber 2\n(watch: bbb)"];
-        Sub3 [label="Subscriber 3\n(watch: ccc)"];
-      }
-
-      Pub1 -> Relay [label="bbb", color="blue", fontcolor="blue", penwidth=2];
-      Pub2 -> Relay [label="ccc", color="green", fontcolor="green", penwidth=2];
-
-      Relay -> Sub1 [label="bbb", color="blue", fontcolor="blue", penwidth=2];
-      Relay -> Sub2 [label="bbb", color="blue", fontcolor="blue", penwidth=2];
-      Relay -> Sub3 [label="ccc", color="green", fontcolor="green", penwidth=2];
-    }
-    ```,
-    labels: (:),
-  ),
+  figures.moq_arch_diagram(),
   caption: [A Media over QUIC (MoQ) architektúra logikai felépítése több stream esetén.],
 ) <fig:moq_arch>
 
@@ -190,16 +156,7 @@ Ezek miatt a Prometheus lett használva közvetlenül, mert egyrészt egyszerűb
 A két technológia összehasonlítását az @tab:prom_vs_otel tartalmazza.
 
 #figure(
-  table(
-    columns: (auto, 1fr, 1fr),
-    inset: 10pt,
-    align: horizon,
-    [*Tulajdonság*], [*Prometheus*], [*OpenTelemetry*],
-    [Modell], [Pull (alapértelmezett)], [Push (OTLP)],
-    [Adattípusok], [Metrika], [Trace, Log, Metrika],
-    [Integráció komplexitása], [Alacsony], [Magas],
-    [Rust támogatás], [Stabil], [Fejlesztés alatt],
-  ),
+  figures.prom_vs_otel_table(),
   caption: [A Prometheus és az OpenTelemetry összehasonlítása.],
 ) <tab:prom_vs_otel>
 
