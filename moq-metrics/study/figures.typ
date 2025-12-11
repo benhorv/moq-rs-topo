@@ -124,7 +124,8 @@
       node [shape=rect, style="filled", fillcolor="#f0f0f0", fontname="Times New Roman"];
       edge [fontname="Times New Roman", fontsize=10];
 
-      // Prometheus Node
+      // Prometheus Node (Top Right)
+      // Visual placement hack: define it last and maybe constrain rank
       Prometheus [label="Prometheus\n(Scraper)", shape=ellipse, fillcolor="#ffe0e0", style="filled"];
 
       // Publisher Cluster
@@ -143,7 +144,7 @@
          style = filled;
          fillcolor = "#e0e0ff";
          RelayCore [label="Relay", fillcolor="white"];
-         RelayMetrics [label="metrics", shape=component, fillcolor="#D0D0FF", fontsize=10];
+         RelayMetrics [label="moq-metrics", shape=component, fillcolor="#D0D0FF", fontsize=10];
          RelayCore -> RelayMetrics [style=dotted, arrowhead=none];
       }
 
@@ -153,7 +154,7 @@
         style = dashed;
         color = gray;
         SubCore [label="Sub", fillcolor="white"];
-        SubMetrics [label="metrics", shape=component, fillcolor="#D0D0FF", fontsize=10];
+        SubMetrics [label="moq-metrics", shape=component, fillcolor="#D0D0FF", fontsize=10];
         SubCore -> SubMetrics [style=dotted, arrowhead=none];
       }
 
@@ -162,10 +163,18 @@
       RelayCore -> SubCore [label="media", color="black", weight=2];
 
       // Scraping Edges
-      edge [color=red, style=dashed, fontcolor=red, fontsize=9];
-      Prometheus -> PubMetrics [label="GET /metrics"];
-      Prometheus -> RelayMetrics [label="GET /metrics"];
-      Prometheus -> SubMetrics [label="GET /metrics"];
+      // To put Prometheus on the RIGHT (sink side), we define edges TO Prometheus
+      // But we want arrows FROM Prometheus (dir=back)
+      edge [color=red, style=dashed, fontcolor=red, fontsize=9, dir=back];
+
+      // Constraint=false to let them float if needed, but here we actually WANT
+      // the structure to push Prometheus to the right.
+      PubMetrics -> Prometheus [label="GET /metrics", weight=0];
+      RelayMetrics -> Prometheus [label="GET /metrics", weight=0];
+      SubMetrics -> Prometheus [label="GET /metrics", weight=0];
+
+      // Force Prometheus to be at least as far right as Subscriber
+      { rank=max; Prometheus; SubCore; }
     }
     ```,
     labels: (:),

@@ -108,7 +108,24 @@
 //   - Vizualizáció Grafanával
 // ]
 
-#slide(title: "A Media over QUIC (MoQ) ökoszisztéma")[
+#slide(title: "Modern streaming alapjai")[
+
+  #v(1em)
+  A hagyományos *TCP/IP* korlátai:
+  - *Head-of-Line Blocking:* Egy elveszett csomag blokkolja a többit
+  - *Magas késleltetés:* Sok handshake
+  - Emiatt streamingre nem alkalmas
+
+  #v(1em)
+  A megoldás: *QUIC* protokoll
+  - UDP alapú, de azzal szemben megbízható
+  - Beépített titkosítás (TLS 1.3) és torlódáskezelés.
+  - 0-RTT handshake - alacsony késleltetés, nincs HoL
+  - pl. Twitch, YouTube
+]
+
+#slide(title: "A Media over QUIC (MoQ)")[
+
   #grid(
     columns: (2fr, 2.1fr),
     column-gutter: 2em,
@@ -136,19 +153,16 @@
   )
 ]
 
-#slide(title: "Kiindulási alap")[
-
+#slide(title: "moq-rs")[
   #grid(
     columns: (1.0fr, 0.45fr),
     column-gutter: 0.2em,
     [
-      A mérések alapjául szolgáló technológiák és implementációk:
+      A feladat `moq-rs` implementációra épül.
 
       #v(1em)
-      *QUIC Protokoll:*
-      - UDP-alapú szállítási réteg
-      - Beépített titkosítás (TLS 1.3)
-      - TCP helyett
+      - A MoQ specifikáció *Rust* nyelvű implementációja.
+      - Moduláris felépítés (`moq-transport`, `-relay`, `-pub`...).
     ],
     align(left)[
       #figure(
@@ -157,11 +171,6 @@
       )
     ],
   )
-
-  #v(1em)
-  *`moq-rs`:*
-  - A Media over QUIC (MoQ) specifikáció *Rust* nyelvű implementációja
-  - Jelenleg a Cloudflare kezelésében
 ]
 
 #slide(title: "A probléma")[
